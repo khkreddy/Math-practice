@@ -2,23 +2,29 @@
 
 A phone-friendly practice sheet for one student, plus a Cloudflare Worker that stores the sheet, the answers, and a profile.
 
-The site is static. GitHub Pages serves `web/`. The Worker is the only place that sees the answer key, the per-sheet token, submissions, photos, and the profile.
+The site is static. Cloudflare Pages serves `web/`. The Worker is the only place that sees the answer key, the per-sheet token, submissions, photos, and the profile.
 
 This repository does not contain the answer key, the student profile, submissions, or photos.
 
 ## Pages
 
-After this is on `main`, the site is:
+The live site is Cloudflare Pages:
 
-https://khkreddy.github.io/Math-practice/
+https://math-practice-9wc.pages.dev/
 
-Hari needs to set **Settings → Pages → Build and deployment → Source** to **GitHub Actions**. The workflow `.github/workflows/pages.yml` deploys the `web/` folder. If the first run says it cannot find a Pages site, set that source and run the workflow again.
+Deploy it from the admin machine. This repo has no workflow that needs a Cloudflare token.
+
+```bash
+npx wrangler pages deploy web --project-name math-practice --branch main
+```
 
 The student link looks like:
 
-`https://khkreddy.github.io/Math-practice/?sheet=2026-10-11-p1&t=<token>`
+`https://math-practice-9wc.pages.dev/?sheet=2026-10-11-p1&t=<token>`
 
-The token is printed by `scripts/create_sheet.py`. It is not stored in git.
+The token is printed by `scripts/create_sheet.py`. It is not stored in git. `PAGES_URL` overrides the link base.
+
+`.github/workflows/pages.yml` can still publish `web/` to GitHub Pages. Once this repo is private, that job may fail because GitHub Pages is unavailable. It is marked so the failure does not block the repo. The live quiz does not use it.
 
 `web/config.js` points at `https://math-practice.khkreddy.workers.dev`. For a local Worker, open the page with `&api=http://127.0.0.1:8787`.
 
@@ -27,8 +33,13 @@ The token is printed by `scripts/create_sheet.py`. It is not stored in git.
 - Sections, instructions, and the printed wording. `$...$` is set with KaTeX.
 - Multiple choice, short writing, and questions with parts.
 - For a drawing (Q16, Q20, Q24a on sheet 1): **Take a picture** (`capture=environment`) and **Choose from gallery**. The photo is previewed, can be retaken, and is compressed to a JPEG of at most 400 KB.
-- One submit, a confirm screen, then a sent screen. A draft stays in `localStorage` on that device.
-- Question 24b shows `figures/q24.svg`.
+- **Check and send** stores the first answers. The page then shows Correct, Not yet, Left blank, or that a drawing is waiting for the teacher. It does not show the key.
+- Not-yet items can be answered once more. That try is stored separately and does not change the marks. The first send stays as it was.
+- **Finish** is the first time the page shows the key, a worked solution when the key has one, and a specific next step for each miss. If the key has no verified note, the line is "No verified notes for this item."
+- Each question has **I don't know**. That clears the answer and records the signal. It is not marked wrong.
+- The page records when a question was first seen, how long it stayed on screen, and how many edits, and sends that with the answers.
+- A draft stays in `localStorage` on that device, including an older draft that has only answers.
+- Question 24b shows `figures/q24.svg`. A figure may instead carry its SVG in `data` (markup or a `data:image/svg+xml` URL). Scripts and external links are removed before it is shown.
 
 ## Worker
 
@@ -37,15 +48,20 @@ Free plan. Storage is Workers KV. Do not add R2; creating a bucket asks for a pa
 | Method | Path | Who |
 |---|---|---|
 | GET | `/health` | anyone |
-| GET | `/sheet/:id?t=<token>` | student link. Sheet only, no answer key. `submitted` is true after a final send |
-| POST | `/submit/:id?t=<token>` | student. Stores answers and photos. A second final send is rejected unless `allow_resubmit` |
+| GET | `/sheet/:id?t=<token>` | student link. Sheet only, no answer key. After a final send, also the check result. The key is included only after Finish |
+| POST | `/submit/:id?t=<token>` | student. Stores the first answers, optional timing, and photos. Returns the check result without the key. A second final send is rejected unless `allow_resubmit` |
+| POST | `/retry/:id?t=<token>` | student, after the check. Stores one re-answer for not-yet items at `retry:<id>`. Does not change the first send or the marks |
+| POST | `/finish/:id?t=<token>` | student. Stores `finish:<id>`, then returns the key, any worked solution, and a next step for each miss |
 | PUT | `/admin/sheet/:id` | `Authorization: Bearer $ADMIN_TOKEN`. Body `{ "sheet", "answer_key", "allow_resubmit"? }`. Returns a new token |
+| PUT | `/admin/sheet/:id/content` | admin. Same body. Replaces the sheet, the key, or both, and keeps the student token |
 | GET | `/admin/sheet/:id` | admin. Sheet, key, and token |
-| GET | `/admin/submissions?since=<iso>` | admin. List without photo bytes |
-| GET | `/admin/submission/:id` | admin. One submission, including photos |
+| GET | `/admin/submissions?since=<iso>&sheet=<id>` | admin. List without photo bytes. `sheet` keeps one sheet |
+| GET | `/admin/submission/:id` | admin. One submission, including photos, plus `retry` and `finish` when they exist |
 | GET, PUT | `/admin/profile` | admin. One JSON profile |
 
-CORS allows `https://khkreddy.github.io` and `http://localhost` / `http://127.0.0.1` with a port. Each stored photo must be at most 1 MB.
+CORS allows every origin in `PAGES_ORIGIN` (comma-separated) and `http://localhost` / `http://127.0.0.1` with a port. The deployed list is `https://khkreddy.github.io` and `https://math-practice-9wc.pages.dev`. Each stored photo must be at most 1 MB.
+
+An old submission that has only `answers` still loads. Retry and Finish use extra keys in the same SUBMISSIONS namespace. Nothing has to be copied into a new namespace, and deploying this Worker does not rotate a token that was already emailed.
 
 ### Deploy
 

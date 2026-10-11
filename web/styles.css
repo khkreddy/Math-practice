@@ -195,3 +195,29 @@ button, .file-btn {
 .missing { margin: 0.3rem 0; }
 
 ul.plain { padding-left: 1.2rem; }
+
+button.idk {
+  margin-top: 0.75rem;
+  width: 100%;
+}
+
+.result {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 16px;
+  padding: 0.9rem 1rem;
+  margin-top: 0.75rem;
+}
+
+.result h2 {
+  font-size: 1.05rem;
+  margin: 0 0 0.35rem;
+}
+
+.mark-correct { border-left-color: var(--ok); }
+.mark-not_yet { border-left-color: #b45309; }
+.mark-blank { border-left-color: #78716c; }
+.mark-pending_review { border-left-color: var(--accent); }
+
+.solution { white-space: pre-wrap; }

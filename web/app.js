@@ -10,9 +10,13 @@
   const state = {
     sheet: null,
     answers: {},
+    timing: {},
+    retryAnswers: {},
+    feedback: null,
     screen: "loading",
     message: "",
     submittedAt: "",
+    observer: null,
   };
 
   const draftKey = () => `math-practice-draft:${sheetId}`;
@@ -68,26 +72,50 @@
   }
 
   function getAt(path) {
-    let node = state.answers[path[0]];
+    let node = answerBag()[path[0]];
     for (let i = 1; i < path.length; i++) {
       node = node && node.parts && node.parts[path[i]];
     }
     return node || {};
   }
 
+  function answerBag() {
+    return state.screen === "retry" ? state.retryAnswers : state.answers;
+  }
+
+  function touchTiming(qid) {
+    if (!state.timing[qid]) {
+      state.timing[qid] = { first_seen_at: null, time_on_question_ms: 0, edit_count: 0, idk: false };
+    }
+    return state.timing[qid];
+  }
+
+  function bumpEdit(qid) {
+    const row = touchTiming(qid);
+    if (!row.first_seen_at) row.first_seen_at = new Date().toISOString();
+    row.edit_count += 1;
+    row.idk = false;
+  }
+
   function setAt(path, patch) {
-    if (!state.answers[path[0]]) state.answers[path[0]] = {};
-    let cursor = state.answers[path[0]];
+    const retrying = state.screen === "retry";
+    const root = retrying ? state.retryAnswers : state.answers;
+    if (!retrying) bumpEdit(path[0]);
+    if (!root[path[0]] || root[path[0]].idk) root[path[0]] = {};
+    let cursor = root[path[0]];
     for (let i = 1; i < path.length; i++) {
       cursor.parts = cursor.parts || {};
-      if (!cursor.parts[path[i]]) cursor.parts[path[i]] = {};
+      if (!cursor.parts[path[i]] || cursor.parts[path[i]].idk) cursor.parts[path[i]] = {};
       cursor = cursor.parts[path[i]];
     }
     Object.assign(cursor, patch);
-    autosave();
+    if (!retrying) autosave();
   }
 
   function leafFilled(leaf) {
+    const row = state.timing[leaf.path[0]];
+    if (row && row.idk) return true;
+    if (state.answers[leaf.path[0]] && state.answers[leaf.path[0]].idk) return true;
     const value = getAt(leaf.path);
     if (leaf.kind === "photo") return Boolean(value.photo);
     return Boolean(value.value && String(value.value).trim());
@@ -113,16 +141,34 @@
     return `${leaf.qno} ${leaf.path.slice(1).map((id) => `(${id})`).join(" ")}`;
   }
 
+  function timingSnapshot() {
+    flushTiming();
+    const out = {};
+    for (const [qid, row] of Object.entries(state.timing)) {
+      out[qid] = {
+        first_seen_at: row.first_seen_at,
+        time_on_question_ms: Math.max(0, Math.round(row.time_on_question_ms || 0)),
+        edit_count: row.edit_count || 0,
+        idk: Boolean(row.idk),
+      };
+    }
+    return out;
+  }
+
+  function draftPayload() {
+    return { v: 2, answers: state.answers, timing: timingSnapshot() };
+  }
+
   function autosave() {
     const note = document.querySelector("[data-save-note]");
     try {
-      localStorage.setItem(draftKey(), JSON.stringify(state.answers));
+      localStorage.setItem(draftKey(), JSON.stringify(draftPayload()));
       if (note) note.textContent = "Saved on this phone.";
     } catch {
       try {
         const slim = JSON.parse(JSON.stringify(state.answers));
         stripPhotos(slim);
-        localStorage.setItem(draftKey(), JSON.stringify(slim));
+        localStorage.setItem(draftKey(), JSON.stringify({ v: 2, answers: slim, timing: timingSnapshot() }));
         if (note) note.textContent = "Written answers are saved on this phone. Pictures stay until you send or leave.";
       } catch {
         if (note) note.textContent = "Could not save a copy on this phone. Stay on this page until you send.";
@@ -140,7 +186,25 @@
   function loadDraft() {
     try {
       const raw = localStorage.getItem(draftKey());
-      if (raw) state.answers = JSON.parse(raw) || {};
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
+      if (parsed.v === 2 && parsed.answers && typeof parsed.answers === "object") {
+        state.answers = parsed.answers;
+        state.timing = {};
+        const timing = parsed.timing && typeof parsed.timing === "object" ? parsed.timing : {};
+        for (const [qid, row] of Object.entries(timing)) {
+          if (!row || typeof row !== "object") continue;
+          state.timing[qid] = {
+            first_seen_at: typeof row.first_seen_at === "string" ? row.first_seen_at : null,
+            time_on_question_ms: Number(row.time_on_question_ms) > 0 ? Number(row.time_on_question_ms) : 0,
+            edit_count: Number.isInteger(row.edit_count) && row.edit_count > 0 ? row.edit_count : 0,
+            idk: Boolean(row.idk),
+          };
+        }
+        return;
+      }
+      state.answers = parsed;
     } catch {
       state.answers = {};
     }
@@ -157,8 +221,54 @@
     return el;
   }
 
+  function sanitizeSvg(input) {
+    if (typeof input !== "string") return "";
+    let svg = input.trim();
+    const base64 = svg.match(/^data:image\/svg\+xml;base64,([A-Za-z0-9+/=\s]+)$/i);
+    if (base64) {
+      try {
+        svg = atob(base64[1].replace(/\s/g, ""));
+      } catch {
+        return "";
+      }
+    } else if (/^data:image\/svg\+xml(?:;charset=[^,;]*)?,/i.test(svg)) {
+      const comma = svg.indexOf(",");
+      try {
+        svg = decodeURIComponent(svg.slice(comma + 1));
+      } catch {
+        return "";
+      }
+    }
+    if (!/<svg\b/i.test(svg)) return "";
+    svg = svg.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+    svg = svg.replace(/<script\b[^>]*>/gi, "");
+    svg = svg.replace(/<\/script>/gi, "");
+    svg = svg.replace(/<foreignObject\b[^>]*>[\s\S]*?<\/foreignObject>/gi, "");
+    svg = svg.replace(/<\/?(?:iframe|object|embed|link|meta)\b[^>]*>/gi, "");
+    svg = svg.replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+    svg = svg.replace(/\s+style\s*=\s*("[^"]*"|'[^']*')/gi, (full, quoted) => {
+      if (/url\s*\(|javascript|expression\s*\(/i.test(quoted)) return "";
+      return full;
+    });
+    svg = svg.replace(/\s+(?:xlink:href|href)\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/gi, (full, _quoted, dq, sq, uq) => {
+      const val = String(dq ?? sq ?? uq ?? "").trim();
+      if (val.startsWith("#") && !/javascript/i.test(val)) return full;
+      return "";
+    });
+    svg = svg.replace(/javascript\s*:/gi, "");
+    return svg;
+  }
+
   function renderFigure(figure) {
     const wrap = h("div", "figure");
+    const inline = figure && typeof figure.data === "string" ? sanitizeSvg(figure.data) : "";
+    if (inline) {
+      const img = document.createElement("img");
+      img.alt = figure.alt || "Figure";
+      img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(inline)}`;
+      wrap.append(img);
+      return wrap;
+    }
     if (!figure || !/^figures\/[A-Za-z0-9._-]+\.svg$/.test(figure.src || "")) {
       wrap.append(h("p", "error", "Figure missing."));
       return wrap;
@@ -369,10 +479,18 @@
       for (const question of section.questions) {
         const article = h("article", "question");
         article.id = `q-${question.id}`;
+        article.dataset.qid = question.id;
         const head = h("div", "qhead");
         head.append(h("span", null, String(question.qno)));
         head.append(h("span", "marks", question.marks === 1 ? "1 mark" : `${question.marks} marks`));
         article.append(head, renderNode(question, [question.id]));
+        const idk = h("button", "secondary idk", "I don't know");
+        idk.type = "button";
+        idk.addEventListener("click", () => markIdk(question.id));
+        article.append(idk);
+        if (state.timing[question.id] && state.timing[question.id].idk) {
+          article.append(h("p", "save-note", "Marked as I don't know. You can still answer it."));
+        }
         sec.append(article);
       }
       app.append(sec);
@@ -386,6 +504,56 @@
     });
     bar.append(button);
     app.append(bar);
+    watchQuestions();
+  }
+
+  function markIdk(qid) {
+    const row = touchTiming(qid);
+    if (!row.first_seen_at) row.first_seen_at = new Date().toISOString();
+    row.idk = true;
+    row.edit_count += 1;
+    state.answers[qid] = { idk: true };
+    const top = window.scrollY;
+    autosave();
+    render();
+    window.scrollTo(0, top);
+  }
+
+  function flushTiming() {
+    const now = Date.now();
+    for (const row of Object.values(state.timing)) {
+      if (!row._visibleSince) continue;
+      row.time_on_question_ms += now - row._visibleSince;
+      row._visibleSince = now;
+    }
+  }
+
+  function markSeen(qid) {
+    const row = touchTiming(qid);
+    if (!row.first_seen_at) row.first_seen_at = new Date().toISOString();
+    if (!row._visibleSince) row._visibleSince = Date.now();
+  }
+
+  function markHidden(qid) {
+    const row = state.timing[qid];
+    if (!row || !row._visibleSince) return;
+    row.time_on_question_ms += Date.now() - row._visibleSince;
+    row._visibleSince = null;
+  }
+
+  function watchQuestions() {
+    flushTiming();
+    if (state.observer) state.observer.disconnect();
+    if (typeof IntersectionObserver !== "function") return;
+    state.observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const qid = entry.target.dataset.qid;
+        if (!qid) continue;
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.4) markSeen(qid);
+        else markHidden(qid);
+      }
+    }, { threshold: [0, 0.4, 1] });
+    for (const article of app.querySelectorAll("article.question")) state.observer.observe(article);
   }
 
   function renderConfirm() {
@@ -419,6 +587,124 @@
     app.append(card);
   }
 
+  function statusWord(status) {
+    if (status === "correct") return "Correct";
+    if (status === "not_yet") return "Not yet";
+    if (status === "pending_review") return "Your teacher will check this";
+    return "Left blank";
+  }
+
+  function marksLine(summary) {
+    const scored = summary || { typed_marks: 0, typed_max: 0, pending_marks: 0 };
+    let line = `${scored.typed_marks} of ${scored.typed_max} marks on the answers that can be checked now.`;
+    if (scored.pending_marks) line += ` ${scored.pending_marks} marks are drawings your teacher will check.`;
+    return line;
+  }
+
+  function findNode(path) {
+    let node = null;
+    for (const section of state.sheet.sections) {
+      for (const question of section.questions) {
+        if (question.id === path[0]) node = question;
+      }
+    }
+    for (const id of path.slice(1)) {
+      if (!node) return null;
+      node = (node.parts || []).find((part) => part.id === id) || null;
+    }
+    return node;
+  }
+
+  function appendMath(parent, className, text) {
+    const el = h("p", className);
+    renderMath(el, text || "");
+    parent.append(el);
+    return el;
+  }
+
+  function renderResultItem(item, reveal) {
+    const block = h("article", `result mark-${item.status}`);
+    block.append(h("h2", null, `${item.label} — ${statusWord(item.status)}`));
+    if (item.prompt) appendMath(block, null, item.prompt);
+    if (item.your_answer) block.append(h("p", null, `You wrote: ${item.your_answer}`));
+    if (reveal && item.key) appendMath(block, null, `The answer: ${item.key}`);
+    if (reveal && item.worked_solution) {
+      block.append(h("p", "save-note", "Solution"));
+      const steps = h("p", "solution");
+      renderMath(steps, item.worked_solution);
+      block.append(steps);
+    }
+    if (reveal && item.action) appendMath(block, null, `Next step: ${item.action}`);
+    if (reveal && item.note) appendMath(block, "save-note", item.note);
+    return block;
+  }
+
+  function renderResults() {
+    const feedback = state.feedback || { items: [], summary: {}, phase: "checked" };
+    const items = feedback.items || [];
+    const notYet = items.some((item) => item.status === "not_yet");
+    app.replaceChildren();
+    const card = h("div", "card");
+    card.append(h("h1", null, "Checked"));
+    card.append(h("p", null, marksLine(feedback.summary)));
+    card.append(h("p", "save-note", "These marks are from the first send."));
+    if (feedback.phase === "retried") {
+      card.append(h("p", null, "Second try saved. It does not change the marks."));
+    }
+    app.append(card);
+    for (const item of items) app.append(renderResultItem(item, false));
+    const bar = h("div", "submit-bar");
+    if (feedback.phase === "checked" && notYet) {
+      const retry = h("button", "primary", "Try the ones that are not yet");
+      retry.type = "button";
+      retry.addEventListener("click", () => {
+        state.retryAnswers = {};
+        state.screen = "retry";
+        render();
+      });
+      bar.append(retry);
+    } else {
+      const finish = h("button", "primary", "Finish");
+      finish.type = "button";
+      finish.addEventListener("click", () => sendFinish(finish));
+      bar.append(finish);
+    }
+    app.append(bar);
+  }
+
+  function renderRetry() {
+    const items = ((state.feedback && state.feedback.items) || []).filter((item) => item.status === "not_yet");
+    app.replaceChildren();
+    const card = h("div", "card");
+    card.append(h("h1", null, "Try again"));
+    card.append(h("p", null, "Answer the ones that were not yet right. This try does not change the marks."));
+    app.append(card);
+    for (const item of items) {
+      const node = findNode(item.path);
+      const article = h("article", "question");
+      article.append(h("h2", null, item.label));
+      if (node) article.append(renderNode(node, item.path));
+      app.append(article);
+    }
+    const bar = h("div", "submit-bar");
+    const save = h("button", "primary", "Save this try");
+    save.type = "button";
+    save.addEventListener("click", () => sendRetry(save));
+    bar.append(save);
+    app.append(bar);
+  }
+
+  function renderReveal() {
+    const feedback = state.feedback || { items: [], summary: {} };
+    app.replaceChildren();
+    const card = h("div", "card");
+    card.append(h("h1", null, "Marks"));
+    card.append(h("p", null, marksLine(feedback.summary)));
+    card.append(h("p", "save-note", "These marks are from the first send."));
+    app.append(card);
+    for (const item of feedback.items || []) app.append(renderResultItem(item, true));
+  }
+
   function renderSubmitted() {
     app.replaceChildren();
     const card = h("div", "card");
@@ -447,20 +733,19 @@
       const res = await fetch(`${workerUrl}/submit/${encodeURIComponent(sheetId)}?t=${encodeURIComponent(token)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers: prune(state.answers) }),
+        body: JSON.stringify({ answers: prune(state.answers), timing: timingSnapshot() }),
       });
       const payload = await res.json().catch(() => ({}));
       if (res.status === 409) {
         clearDraft();
-        state.submittedAt = "";
-        state.screen = "submitted";
-        render();
+        await loadSheetView();
         return;
       }
       if (!res.ok) throw new Error(payload.error || "Could not send");
       clearDraft();
       state.submittedAt = payload.submitted_at || "";
-      state.screen = "submitted";
+      state.feedback = payload.feedback || null;
+      state.screen = state.feedback ? "results" : "submitted";
       render();
     } catch {
       button.disabled = false;
@@ -470,9 +755,95 @@
     }
   }
 
+  async function sendRetry(button) {
+    button.disabled = true;
+    button.textContent = "Saving…";
+    try {
+      const res = await fetch(`${workerUrl}/retry/${encodeURIComponent(sheetId)}?t=${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers: prune(state.retryAnswers) }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || "Could not save");
+      state.feedback = payload.feedback || state.feedback;
+      state.screen = "results";
+      render();
+    } catch {
+      button.disabled = false;
+      button.textContent = "Save this try";
+      button.parentElement.append(h("p", "error", "Could not save this try. Check the connection and try again."));
+    }
+  }
+
+  async function sendFinish(button) {
+    button.disabled = true;
+    button.textContent = "Finishing…";
+    try {
+      const res = await fetch(`${workerUrl}/finish/${encodeURIComponent(sheetId)}?t=${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        state.screen = "retry";
+        render();
+        return;
+      }
+      if (!res.ok) throw new Error(payload.error || "Could not finish");
+      state.feedback = payload.feedback || state.feedback;
+      state.screen = "reveal";
+      render();
+    } catch {
+      button.disabled = false;
+      button.textContent = "Finish";
+      button.parentElement.append(h("p", "error", "Could not finish. Check the connection and try again."));
+    }
+  }
+
+  function applySheetPayload(payload) {
+    state.sheet = payload.sheet;
+    document.title = (payload.sheet && payload.sheet.title) || "Practice sheet";
+    state.submittedAt = payload.submitted_at || "";
+    state.feedback = payload.feedback || null;
+    if (payload.submitted && payload.feedback && payload.feedback.phase === "finished") {
+      clearDraft();
+      state.screen = "reveal";
+      return;
+    }
+    if (payload.submitted && payload.feedback) {
+      clearDraft();
+      state.screen = "results";
+      return;
+    }
+    if (payload.submitted) {
+      clearDraft();
+      state.screen = "submitted";
+      return;
+    }
+    loadDraft();
+    state.screen = "quiz";
+  }
+
+  async function loadSheetView() {
+    const res = await fetch(`${workerUrl}/sheet/${encodeURIComponent(sheetId)}?t=${encodeURIComponent(token)}`);
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(payload.error || "load failed");
+    applySheetPayload(payload);
+    render();
+  }
+
   function render() {
+    if (state.screen !== "quiz" && state.observer) {
+      state.observer.disconnect();
+      state.observer = null;
+    }
     if (state.screen === "quiz") renderQuiz();
     else if (state.screen === "confirm") renderConfirm();
+    else if (state.screen === "results") renderResults();
+    else if (state.screen === "retry") renderRetry();
+    else if (state.screen === "reveal") renderReveal();
     else if (state.screen === "submitted") renderSubmitted();
     else renderMessage("Something went wrong", state.message || "Try the link again.");
   }
@@ -494,22 +865,18 @@
         return;
       }
       if (!res.ok) throw new Error(payload.error || "load failed");
-      state.sheet = payload.sheet;
-      document.title = payload.sheet.title || "Practice sheet";
-      if (payload.submitted) {
-        clearDraft();
-        state.screen = "submitted";
-        state.message = "";
-        render();
-        return;
-      }
-      loadDraft();
-      state.screen = "quiz";
+      applySheetPayload(payload);
       render();
     } catch {
       renderMessage("Could not load the sheet", "Check the connection and open the link again.");
     }
   }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "hidden") return;
+    for (const qid of Object.keys(state.timing)) markHidden(qid);
+    if (state.screen === "quiz") autosave();
+  });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", start);

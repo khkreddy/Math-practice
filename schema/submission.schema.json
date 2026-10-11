@@ -11,13 +11,29 @@
     "answers": {
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/answer" }
+    },
+    "timing": {
+      "type": "object",
+      "description": "Optional per-question timing from the page. An I don't know flag clears that answer and is not a wrong answer.",
+      "additionalProperties": { "$ref": "#/$defs/timing" }
     }
   },
   "$defs": {
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "first_seen_at": { "type": ["string", "null"] },
+        "time_on_question_ms": { "type": "number", "minimum": 0 },
+        "edit_count": { "type": "integer", "minimum": 0 },
+        "idk": { "type": "boolean" }
+      }
+    },
     "answer": {
       "type": "object",
       "properties": {
         "value": { "type": "string" },
+        "idk": { "type": "boolean", "description": "The student pressed I don't know. No answer value is stored." },
         "photo": { "type": "string", "description": "Base64 JPEG without a data: prefix. Max 1 MB." },
         "content_type": { "const": "image/jpeg" },
         "parts": {

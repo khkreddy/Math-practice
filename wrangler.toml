@@ -18,6 +18,7 @@ binding = "PROFILE"
 id = "bae657792d4d4a228f5bcbc8f8d681f0"
 
 [vars]
-# Browser origin of the GitHub Pages site (no path). The quiz is served at
-# https://khkreddy.github.io/Math-practice/ and the origin is the host below.
-PAGES_ORIGIN = "https://khkreddy.github.io"
+# Browser origins allowed to call the Worker, comma-separated, no path.
+# The live quiz is https://math-practice-9wc.pages.dev/
+# The old GitHub Pages origin stays allowed.
+PAGES_ORIGIN = "https://khkreddy.github.io,https://math-practice-9wc.pages.dev"
