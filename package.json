@@ -1,0 +1,14 @@
+{
+  "name": "math-practice",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:py": "python3 -m unittest discover -s tests -v",
+    "figures": "bash scripts/build_figures.sh"
+  },
+  "devDependencies": {
+    "miniflare": "^4.20250906.0",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.33.0"
+  }
+}

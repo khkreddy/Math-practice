@@ -1,0 +1,186 @@
+% Original code written for Hari's teaching use; option set modelled on mathfigures.com (teacher.dev). No site code used.
+%% mathfig-lines.code.tex -- \mfAngles and \mfParallelLines.  Original code (see mathfig.sty).
+\pgfkeys{/mf/angles/.cd,
+  rays/.initial={0,60}, lines/.initial={}, styles/.initial={}, length/.initial=5,
+  angle labels/.initial={auto}, angle arcs/.initial={}, vertex/.initial=, points/.initial={},
+  turn/.initial=0, round/.initial=1, arrows/.initial=true, scale/.initial=1, radius/.initial=0.6,
+  right angle squares/.initial=true, reflex/.initial=false}
+\pgfkeys{/mf/parallel/.cd,
+  lines/.initial={m,n}, gap/.initial=2.2, transversals/.initial={t/65}, length/.initial=10,
+  marks/.initial=1, angles/.initial={}, points/.initial={}, arrows/.initial=true, turn/.initial=0,
+  round/.initial=1, scale/.initial=1, styles/.initial={}}
+\ExplSyntaxOn
+\cs_new:Npn \mf_ak:n #1 { \pgfkeysvalueof{/mf/angles/#1} }
+\cs_new:Npn \__mf_pol:nn #1#2 { \fp_eval:n{round((#2)*cosd(#1),4)} , \fp_eval:n{round((#2)*sind(#1),4)} }
+\cs_new:Npn \mf_lk:n #1 { \pgfkeysvalueof{/mf/parallel/#1} }
+\seq_new:N \l__mf_dirs_seq
+\seq_new:N \l__mf_rays_seq
+\seq_new:N \l__mf_tmp_seq
+\fp_new:N \l__mf_a_fp
+\fp_new:N \l__mf_b_fp
+\cs_new_protected:Npn \__mf_ang_mark:nnnnn #1#2#3#4#5 % start, end (deg), label, arcs, radius
+  {
+    \fp_set:Nn \l__mf_a_fp { #2 - #1 }
+    \bool_if:nTF { \int_compare_p:nNn {\mf_bool_ak:n {right~angle~squares}} = 1 && \fp_compare_p:nNn { abs(\l__mf_a_fp - 90) } < {0.05} }
+      { \use:e { \exp_not:N \draw[mf~thin] (\__mf_pol:nn{#1}{0.32}) -- ++(\__mf_pol:nn{#2}{0.32}) -- (\__mf_pol:nn{#2}{0.32}); } }
+      {
+        \int_set:Nn \l__mf_k_int { \tl_if_blank:nTF {#4} {0} {#4} }
+        \int_compare:nNnT {\l__mf_k_int} = {0} { \tl_if_blank:nF {#3} { \int_set:Nn \l__mf_k_int {1} } }
+        \int_step_inline:nn {\l__mf_k_int}
+          { \use:e { \exp_not:N \draw[mf~thin] (\__mf_pol:nn{#1}{#5+(##1-1)*0.08}) arc[start~angle=#1, end~angle=#2, radius=\fp_eval:n{#5+(##1-1)*0.08}]; } }
+      }
+    \tl_if_blank:nF {#3}
+      {
+        \use:e { \exp_not:N \node[inner~sep=0.5pt] at ( \__mf_pol:nn {(#1+#2)/2} { max(#5+0.42, 0.4/sind(max(\fp_use:N\l__mf_a_fp,6)/2)) } ) {\exp_not:N \mflab{\exp_not:n{#3}}}; }
+      }
+  }
+\cs_new:Npn \mf_bool_ak:n #1 { \str_if_eq:eeTF {\mf_ak:n{#1}} {true} {1} {0} }
+\NewDocumentCommand \mfAngles { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/angles}{#1}
+    \int_set:Nn \l_mf_round_int { \mf_ak:n{round} }
+    \seq_set_from_clist:Ne \l__mf_rays_seq { \mf_ak:n{rays} }
+    \seq_set_from_clist:Ne \l__mf_tmp_seq { \mf_ak:n{lines} }
+    % all drawn directions: rays, plus the opposite direction of rays drawn as lines
+    \seq_clear:N \l__mf_dirs_seq
+    \int_zero:N \l__mf_i_int
+    \seq_map_inline:Nn \l__mf_rays_seq
+      {
+        \int_incr:N \l__mf_i_int
+        \seq_put_right:Nx \l__mf_dirs_seq { \fp_eval:n { round(##1 - 360*floor(##1/360), 4) } }
+        \str_if_eq:eeT { \seq_item:Nn \l__mf_tmp_seq {\l__mf_i_int} } {true}
+          { \seq_put_right:Nx \l__mf_dirs_seq { \fp_eval:n { round(##1+180 - 360*floor((##1+180)/360), 4) } } }
+      }
+    \seq_sort:Nn \l__mf_dirs_seq { \fp_compare:nNnTF {##1} > {##2} { \sort_return_swapped: } { \sort_return_same: } }
+    \seq_remove_duplicates:N \l__mf_dirs_seq
+    \seq_set_from_clist:Ne \l__mf_lab_seq { \mf_ak:n{angle~labels} }
+    \seq_set_from_clist:Ne \l__mf_arc_seq { \mf_ak:n{angle~arcs} }
+    \seq_set_from_clist:Ne \l__mf_sty_seq { \mf_ak:n{styles} }
+    \begin{tikzpicture}[mf, scale=\mf_ak:n{scale}, every~node/.append~style={font=\mf_font:}, rotate=\mf_ak:n{turn}]
+      % rays
+      \int_zero:N \l__mf_i_int
+      \seq_map_inline:Nn \l__mf_rays_seq
+        {
+          \int_incr:N \l__mf_i_int
+          \tl_set:Nx \l_tmpa_tl { \seq_item:Nn \l__mf_sty_seq {\l__mf_i_int} }
+          \tl_set:Nx \l_tmpb_tl { \str_case:enF {\l_tmpa_tl} { {dashed}{mf~dashed} {dotted}{mf~dotted} } {} }
+          \str_if_eq:eeTF { \seq_item:Nn \l__mf_tmp_seq {\l__mf_i_int} } {true}
+            { \use:e { \exp_not:N \draw[\int_compare:nNnT {\mf_bool_ak:n{arrows}} = 1 {mf~arrows,~} \l_tmpb_tl]
+                (\__mf_pol:nn{##1+180}{\mf_ak:n{length}}) -- (\__mf_pol:nn{##1}{\mf_ak:n{length}}); } }
+            { \use:e { \exp_not:N \draw[\int_compare:nNnT {\mf_bool_ak:n{arrows}} = 1 {mf~arrow,~} \l_tmpb_tl] (0,0) -- (\__mf_pol:nn{##1}{\mf_ak:n{length}}); } }
+        }
+      % angles between consecutive directions (counter-clockwise from the baseline)
+      \int_set:Nn \l__mf_n_int { \seq_count:N \l__mf_dirs_seq }
+      \int_step_inline:nn { \l__mf_n_int }
+        {
+          \fp_set:Nn \l__mf_a_fp { \seq_item:Nn \l__mf_dirs_seq {##1} }
+          \fp_set:Nn \l__mf_b_fp { \int_compare:nNnTF {##1} = {\l__mf_n_int} { \seq_item:Nn \l__mf_dirs_seq {1} + 360 } { \seq_item:Nn \l__mf_dirs_seq {##1+1} } }
+          \tl_set:Nx \l_tmpa_tl { \seq_item:Nn \l__mf_lab_seq {##1} }
+          \bool_if:nT { \fp_compare_p:nNn { \l__mf_b_fp - \l__mf_a_fp } < {180} || \int_compare_p:nNn {\mf_bool_ak:n{reflex}} = 1 }
+            {
+              \mf_resolve:eee { \l_tmpa_tl } {1} { \mf_num:n{ \l__mf_b_fp - \l__mf_a_fp }^\circ }
+              \use:e { \exp_not:N \__mf_ang_mark:nnnnn { \fp_use:N \l__mf_a_fp } { \fp_use:N \l__mf_b_fp } { \exp_not:V \l_mf_lab_tl }
+                       { \seq_item:Nn \l__mf_arc_seq {##1} } { \mf_ak:n{radius} } }
+            }
+        }
+      % names: vertex and points on the rays
+      \tl_if_blank:eF { \mf_ak:n{vertex} } { \node[anchor=north~east] at (0,0) {\mflab{\mf_ak:n{vertex}}}; }
+      \seq_set_from_clist:Ne \l_tmpa_seq { \mf_ak:n{points} }
+      \int_zero:N \l__mf_i_int
+      \seq_map_inline:Nn \l_tmpa_seq
+        { \int_incr:N \l__mf_i_int
+          \tl_if_blank:nF {##1}
+            { \tl_set:Nx \l_tmpb_tl { \seq_item:Nn \l__mf_rays_seq {\l__mf_i_int} }
+              \use:e { \exp_not:N \fill (\__mf_pol:nn{\l_tmpb_tl}{0.8*\mf_ak:n{length}}) circle[radius=1.6pt];
+                \exp_not:N \node[anchor=\fp_eval:n{\l_tmpb_tl-90}] at (\__mf_pol:nn{\l_tmpb_tl}{0.8*\mf_ak:n{length}}) {\exp_not:N\mflab{\exp_not:n{##1}}}; } } }
+    \end{tikzpicture}
+    \group_end:
+  }
+\seq_new:N \l__mf_lab_seq
+\seq_new:N \l__mf_arc_seq
+\seq_new:N \l__mf_sty_seq
+\cs_generate_variant:Nn \seq_set_from_clist:Nn {Ne}
+%% ---------------------------------------------------------------- parallel lines and transversals
+\NewDocumentCommand \mfParallelLines { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/parallel}{#1}
+    \int_set:Nn \l_mf_round_int { \mf_lk:n{round} }
+    \seq_set_from_clist:Ne \l__mf_rays_seq { \mf_lk:n{lines} }
+    \int_set:Nn \l__mf_n_int { \seq_count:N \l__mf_rays_seq }
+    \tl_set:Nx \l_tmpa_tl { \mf_lk:n{length} }
+    \begin{tikzpicture}[mf, scale=\mf_lk:n{scale}, every~node/.append~style={font=\mf_font:}, rotate=\mf_lk:n{turn}]
+      % parallel lines, top to bottom: y = -(i-1)*gap
+      \int_step_inline:nn {\l__mf_n_int}
+        {
+          \tl_set:Nx \l_tmpb_tl { \fp_eval:n{ -(##1-1)*\mf_lk:n{gap} } }
+          \use:e { \exp_not:N \draw[\int_compare:nNnT {\str_if_eq:eeTF{\mf_lk:n{arrows}}{true}{1}{0}} = 1 {mf~arrows}] (0,\l_tmpb_tl) -- (\l_tmpa_tl,\l_tmpb_tl); }
+          \int_step_inline:nn { \mf_lk:n{marks} }
+            { \draw[mf~barb,~line~width=0.9pt] (\fp_eval:n{1.05+0.2*####1+0.04*##1},\l_tmpb_tl) -- ++(0.12,0); }
+          \tl_if_blank:eF { \seq_item:Nn \l__mf_rays_seq {##1} }
+            { \node[anchor=west] at (\fp_eval:n{\l_tmpa_tl+0.15},\l_tmpb_tl) {\mflab{\seq_item:Nn \l__mf_rays_seq {##1}}}; }
+        }
+      % transversals name/angle[/x position on the first line]
+      \int_zero:N \l__mf_j_int
+      \clist_map_inline:en { \mf_lk:n{transversals} } { \__mf_transversal:w ##1 / / / \q_stop }
+      % angle labels: transversal/line/position/label   (position 1..4: above-right, above-left, below-left, below-right)
+      \clist_map_inline:en { \mf_lk:n{angles} } { \__mf_pl_angle:w ##1 / / / / \q_stop }
+      \clist_map_inline:en { \mf_lk:n{points} } { \__mf_pl_point:w ##1 / / / \q_stop }
+    \end{tikzpicture}
+    \group_end:
+  }
+\cs_generate_variant:Nn \clist_map_inline:nn {en}
+\cs_new_protected:Npn \__mf_transversal:w #1 / #2 / #3 / #4 \q_stop
+  {
+    \int_incr:N \l__mf_j_int
+    \tl_if_blank:nF {#1#2}
+      {
+        \tl_set:cx { l__mf_tang_\int_use:N\l__mf_j_int _tl } { \tl_if_blank:nTF {#2} {65} {#2} }
+        \tl_set:cx { l__mf_tx_\int_use:N\l__mf_j_int _tl } { \tl_if_blank:nTF {#3} { \fp_eval:n{ 0.62*\mf_lk:n{length} + (\l__mf_j_int-1)*1.6 } } {#3} }
+        \tl_set:Nx \l__mf_ang_tl { \tl_use:c { l__mf_tang_\int_use:N\l__mf_j_int _tl } }
+        \tl_set:Nx \l__mf_tx_tl { \tl_use:c { l__mf_tx_\int_use:N\l__mf_j_int _tl } }
+        \tl_set:Nx \l__mf_bot_tl { \fp_eval:n{ -(\l__mf_n_int-1)*\mf_lk:n{gap} } }
+        % from 1.1 above the top line to 1.1 below the bottom line, through (tx, 0)
+        \use:e { \exp_not:N \draw[\str_if_eq:eeT{\mf_lk:n{arrows}}{true}{mf~arrows}]
+          (\fp_eval:n{ round(\l__mf_tx_tl + 1.3/tand(\l__mf_ang_tl), 4) }, 1.3) --
+          (\fp_eval:n{ round(\l__mf_tx_tl + (\l__mf_bot_tl-1.3)/tand(\l__mf_ang_tl), 4) }, \fp_eval:n{\l__mf_bot_tl-1.3}); }
+        \tl_if_blank:nF {#1}
+          { \node[anchor=south~west] at (\fp_eval:n{ round(\l__mf_tx_tl + 1.3/tand(\l__mf_ang_tl), 4) }, 1.35) {\mflab{#1}}; }
+      }
+  }
+\tl_new:N \l__mf_ang_tl \tl_new:N \l__mf_tx_tl \tl_new:N \l__mf_bot_tl
+\cs_generate_variant:Nn \str_if_eq:nnT {ee}
+\cs_new_protected:Npn \__mf_pl_angle:w #1 / #2 / #3 / #4 / #5 \q_stop
+  {
+    \tl_if_blank:nF {#1}
+      {
+        \tl_set:Nx \l__mf_ang_tl { \tl_use:c { l__mf_tang_#1_tl } }
+        \tl_set:Nx \l__mf_tx_tl { \fp_eval:n{ round( \tl_use:c { l__mf_tx_#1_tl } + (-(#2-1)*\mf_lk:n{gap})/tand(\l__mf_ang_tl), 4) } }
+        \tl_set:Nx \l__mf_bot_tl { \fp_eval:n{ -(#2-1)*\mf_lk:n{gap} } }
+        \tl_set:Nx \l_tmpa_tl { \int_case:nn {#3} { {1}{0} {2}{\l__mf_ang_tl} {3}{180} {4}{\fp_eval:n{180+\l__mf_ang_tl}} } }
+        \tl_set:Nx \l_tmpb_tl { \int_case:nn {#3} { {1}{\l__mf_ang_tl} {2}{180} {3}{\fp_eval:n{180+\l__mf_ang_tl}} {4}{360} } }
+        \mf_resolve:eee {#4} {1} { \mf_num:n{ \l_tmpb_tl - \l_tmpa_tl }^\circ }
+        \begin{scope}[shift={(\l__mf_tx_tl,\l__mf_bot_tl)}]
+          \use:e { \exp_not:N \__mf_pl_mark:nnn {\l_tmpa_tl} {\l_tmpb_tl} { \exp_not:V \l_mf_lab_tl } }
+        \end{scope}
+      }
+  }
+\cs_new_protected:Npn \__mf_pl_mark:nnn #1#2#3
+  {
+    \use:e { \exp_not:N \draw[mf~thin] (\__mf_pol:nn{#1}{0.42}) arc[start~angle=#1, end~angle=#2, radius=0.42]; }
+    \tl_if_blank:nF {#3}
+      { \use:e { \exp_not:N \node[inner~sep=0.5pt] at ( \__mf_pol:nn {(#1+#2)/2} { max(0.8, 0.42/sind(max(#2-#1,6)/2)) } ) {\exp_not:N\mflab{\exp_not:n{#3}}}; } }
+  }
+\cs_new_protected:Npn \__mf_pl_point:w #1 / #2 / #3 / #4 \q_stop
+  {
+    \tl_if_blank:nF {#1}
+      {
+        \tl_set:Nx \l__mf_ang_tl { \tl_use:c { l__mf_tang_#1_tl } }
+        \tl_set:Nx \l__mf_bot_tl { \fp_eval:n{ -(#2-1)*\mf_lk:n{gap} } }
+        \tl_set:Nx \l__mf_tx_tl { \fp_eval:n{ round( \tl_use:c { l__mf_tx_#1_tl } + \l__mf_bot_tl/tand(\l__mf_ang_tl), 4) } }
+        \fill (\l__mf_tx_tl,\l__mf_bot_tl) circle[radius=1.6pt];
+        \node[anchor=north~west] at (\fp_eval:n{\l__mf_tx_tl+0.05},\fp_eval:n{\l__mf_bot_tl-0.05}) {\mflab{#3}};
+      }
+  }
+\ExplSyntaxOff

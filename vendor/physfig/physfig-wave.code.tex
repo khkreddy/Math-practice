@@ -1,0 +1,100 @@
+%% ===================================================== waves
+%% \pfWave[type=transverse|longitudinal|both, amplitude=3, wavelength=4, cycles=2, ...]
+\newif\ifpf@w@lm \newif\ifpf@w@am \newif\ifpf@w@pm \newif\ifpf@w@num \newif\ifpf@w@grid \newif\ifpf@w@axes
+\pgfqkeys{/pf/wave}{
+  type/.initial=transverse, against/.initial=distance,
+  amplitude/.initial=3, wavelength/.initial=4, period/.initial=1, cycles/.initial=2,
+  wavelength mark/.is if=pf@w@lm, wavelength label/.initial=\lambda,
+  amplitude mark/.is if=pf@w@am, amplitude label/.initial=A,
+  period mark/.is if=pf@w@pm, period label/.initial=T,
+  crest label/.initial=, trough label/.initial=, compression label/.initial=, rarefaction label/.initial=,
+  numbered/.is if=pf@w@num, gridlines/.is if=pf@w@grid, axes/.is if=pf@w@axes,
+  title/.initial=, x title/.initial=auto, y title/.initial=Displacement (cm),
+  xmax/.initial=, xstep/.initial=, number every/.initial=2, ymax/.initial=, ystep/.initial=,
+  minor/.initial=0,
+  width/.initial=11, height/.initial=6.4,
+  label font/.initial=\small\sffamily, number font/.initial=\footnotesize\sffamily,
+  color/.is if=pf@color, scale/.initial=1,
+}
+\def\pf@wk#1{\pgfkeysvalueof{/pf/wave/#1}}
+\newcommand\pfWave[1][]{%
+  \begingroup\pgfqkeys{/pf/wave}{wavelength mark=true, amplitude mark=true, numbered=true, gridlines=true, axes=true, #1}%
+  \edef\pf@type{\pf@wk{type}}\edef\pf@A{\pf@wk{amplitude}}\edef\pf@cy{\pf@wk{cycles}}%
+  \pf@ifstr{\pf@wk{against}}{time}{\edef\pf@lam{\pf@wk{period}}\def\pf@xt{Time (s)}}{\edef\pf@lam{\pf@wk{wavelength}}\def\pf@xt{Distance (m)}}%
+  \edef\pf@xtit{\pf@wk{x title}}\pf@ifstr{\pf@xtit}{auto}{\let\pf@xtit\pf@xt}{}%
+  \edef\pf@L{\fpeval{\pf@lam*\pf@cy}}% length of the wave in x units
+  % x axis
+  \edef\pf@xs{\pf@wk{xstep}}\pf@ifstr{\pf@xs}{}{\pf@nicestep{\pf@L}{24}\let\pf@xs\pf@ns}{}%
+  \edef\pf@X{\pf@wk{xmax}}\pf@ifstr{\pf@X}{}{\edef\pf@X{\fpeval{ceil(\pf@L/\pf@xs-0.0001)*\pf@xs}}}{}%
+  % y axis
+  \edef\pf@ys{\pf@wk{ystep}}\pf@ifstr{\pf@ys}{}{\pf@nicestep{2*\pf@A+2}{12}\let\pf@ys\pf@ns}{}%
+  \edef\pf@Y{\pf@wk{ymax}}\pf@ifstr{\pf@Y}{}{\edef\pf@Y{\fpeval{ceil((\pf@A*1.3+0.6*\pf@ys)/\pf@ys)*\pf@ys}}}{}%
+  \edef\pf@W{\pf@wk{width}}\edef\pf@H{\pf@wk{height}}%
+  \edef\pf@sx{\fpeval{\pf@W/\pf@X}}\edef\pf@sy{\fpeval{\pf@H/(2*\pf@Y)}}%
+  \begin{tikzpicture}[pf, scale=\pf@wk{scale}]
+  \pf@ifstr{\pf@type}{longitudinal}{}{%
+  \begin{scope}[yshift=\pf@H/2 cm]
+  \ifpf@w@axes
+    \ifpf@w@grid
+      \edef\pf@mn{\pf@wk{minor}}\ifnum\pf@mn>0
+        \foreach \pf@k in {0,...,\fpeval{round(\pf@X/\pf@xs*\pf@mn)}}{\draw[pfgrid!45, line width=0.25pt] ({\pf@k*\pf@xs/\pf@mn*\pf@sx},-\pf@H/2) -- ++(0,\pf@H);}
+        \foreach \pf@k in {0,...,\fpeval{round(2*\pf@Y/\pf@ys*\pf@mn)}}{\draw[pfgrid!45, line width=0.25pt] (0,{-\pf@H/2+\pf@k*\pf@ys/\pf@mn*\pf@sy}) -- ++(\pf@W,0);}\fi
+      \foreach \pf@k in {0,...,\fpeval{round(\pf@X/\pf@xs)}}{\draw[pfgrid, line width=0.45pt] ({\pf@k*\pf@xs*\pf@sx},-\pf@H/2) -- ++(0,\pf@H);}
+      \foreach \pf@k in {0,...,\fpeval{round(2*\pf@Y/\pf@ys)}}{\draw[pfgrid, line width=0.45pt] (0,{-\pf@H/2+\pf@k*\pf@ys*\pf@sy}) -- ++(\pf@W,0);}
+    \else
+      \foreach \pf@k in {0,...,\fpeval{round(\pf@X/\pf@xs)}}{\draw[line width=0.5pt] ({\pf@k*\pf@xs*\pf@sx},-0.08) -- ++(0,0.16);}
+      \foreach \pf@k in {0,...,\fpeval{round(2*\pf@Y/\pf@ys)}}{\draw[line width=0.5pt] (-0.08,{-\pf@H/2+\pf@k*\pf@ys*\pf@sy}) -- ++(0.16,0);}
+    \fi
+    \draw[line width=1.1pt] (0,-\pf@H/2) -- (0,\pf@H/2);
+    \draw[line width=1.1pt] (0,0) -- (\pf@W,0);
+    \ifpf@w@num
+      \edef\pf@ne{\pf@wk{number every}}\ifnum\pf@ne>0
+      \foreach \pf@k in {0,\pf@ne,...,\fpeval{round(\pf@X/\pf@xs)}}{\node[font=\pf@wk{number font}, anchor=north, inner sep=2pt] at ({\pf@k*\pf@xs*\pf@sx},0) {\pgfmathprintnumber{\fpeval{\pf@k*\pf@xs}}};}\fi
+      \foreach \pf@k in {0,...,\fpeval{round(2*\pf@Y/\pf@ys)}}{\edef\pf@v{\fpeval{-\pf@Y+\pf@k*\pf@ys}}%
+        \ifdim\fpeval{abs(\pf@v)}pt>0.0001pt\node[font=\pf@wk{number font}, anchor=east, inner sep=3pt] at (0,{\pf@v*\pf@sy}) {\pgfmathprintnumber{\pf@v}};\fi}
+    \fi
+    \node[font=\pf@wk{label font}\bfseries, anchor=north] at (\pf@W/2,-\pf@H/2-0.15) {\pf@axislab{\pf@xtit}};
+    \node[font=\pf@wk{label font}\bfseries, rotate=90, anchor=south] at (\ifpf@w@num -0.7\else -0.25\fi,0) {\pf@axislab{\pf@wk{y title}}};
+  \else
+    \draw[line width=0.5pt, dash pattern=on 3pt off 2pt] (0,0) -- (\pf@L*\pf@sx,0);
+  \fi
+  % the wave
+  \draw[line width=1.6pt, \ifpf@color pfblue\fi] plot[domain=0:\pf@L, samples=\fpeval{round(40*\pf@cy+20)}, smooth] ({\x*\pf@sx},{\pf@A*\pf@sy*sin(360*\x/\pf@lam)});
+  % marks
+  \edef\pf@cxa{\fpeval{\pf@lam/4*\pf@sx}}\edef\pf@cxb{\fpeval{5*\pf@lam/4*\pf@sx}}\edef\pf@cyy{\fpeval{\pf@A*\pf@sy}}%
+  \edef\pf@two{\fpeval{\pf@cy>=1.25?1:0}}%
+  \pf@ifstr{\pf@wk{against}}{time}{\ifpf@w@pm\edef\pf@lm{1}\edef\pf@ll{\pf@wk{period label}}\else\edef\pf@lm{0}\fi}%
+     {\ifpf@w@lm\edef\pf@lm{1}\edef\pf@ll{\pf@wk{wavelength label}}\else\edef\pf@lm{0}\fi}%
+  \ifnum\pf@lm=1 \ifnum\pf@two=1
+    \draw[line width=0.4pt, dash pattern=on 2pt off 2pt] (\pf@cxa,\pf@cyy) -- ++(0,0.75) (\pf@cxb,\pf@cyy) -- ++(0,0.75);
+    \draw[pf thin arrow, {Stealth[length=5pt,width=4pt]}-{Stealth[length=5pt,width=4pt]}] (\pf@cxa,\pf@cyy+0.6) -- (\pf@cxb,\pf@cyy+0.6) node[pos=0.5, pf halo, anchor=center]{\pf@lab{\pf@ll}};
+  \else
+    \draw[pf thin arrow, {Stealth[length=5pt,width=4pt]}-{Stealth[length=5pt,width=4pt]}] (0,\pf@cyy+0.6) -- (\pf@lam*\pf@sx,\pf@cyy+0.6) node[pos=0.5, pf halo]{\pf@lab{\pf@ll}};
+  \fi\fi
+  \ifpf@w@am\draw[pf thin arrow, {Stealth[length=5pt,width=4pt]}-{Stealth[length=5pt,width=4pt]}] (\pf@cxa,0) -- (\pf@cxa,\pf@cyy) node[pos=0.5, anchor=east, pf halo, inner sep=2pt, xshift=-2pt]{\pf@lab{\pf@wk{amplitude label}}};\fi
+  \edef\pf@lastc{\fpeval{(floor(\pf@cy-0.25)+0.25)*\pf@lam*\pf@sx}}\edef\pf@lastt{\fpeval{(floor(\pf@cy-0.75)+0.75)*\pf@lam*\pf@sx}}%
+  \pf@ifnolab{\pf@wk{crest label}}{}{\node[anchor=south, pf halo] at (\pf@lastc,\pf@cyy+0.12) {\pf@txtlab{\pf@wk{crest label}}};}%
+  \pf@ifnolab{\pf@wk{trough label}}{}{\node[anchor=north, pf halo] at (\pf@lastt,-\pf@cyy-0.12) {\pf@txtlab{\pf@wk{trough label}}};}%
+  \end{scope}}%
+  % longitudinal wave (particles drawn as lines)
+  \pf@ifstr{\pf@type}{transverse}{}{%
+    \edef\pf@ly{\pf@ifstr{\pf@type}{both}{\fpeval{\pf@H/2+0.3}}{0}}%
+    \edef\pf@n{\fpeval{round(\pf@L/\pf@lam*26)}}\edef\pf@dx{\fpeval{\pf@L/\pf@n}}\edef\pf@s0{}%
+    \foreach \pf@k in {0,...,\pf@n}{\edef\pf@xx{\fpeval{(\pf@k*\pf@dx-0.11*\pf@lam*sin(2*pi*(\pf@k*\pf@dx-\pf@lam/4)/\pf@lam))*\pf@sx}}%
+       \ifdim\pf@xx pt>-0.001pt\relax\draw[line width=1pt, \ifpf@color pfblue\fi] (\pf@xx,\pf@ly) -- ++(0,1.2);\fi}
+    \pf@ifstr{\pf@type}{longitudinal}{\def\pf@lla{north}\edef\pf@lly{\fpeval{\pf@ly-0.12}}}{\def\pf@lla{south}\edef\pf@lly{\fpeval{\pf@ly+1.3}}}%
+    \pf@ifnolab{\pf@wk{compression label}}{}{\node[anchor=\pf@lla] at (\fpeval{\pf@lam/4*\pf@sx},\pf@lly) {\pf@txtlab{\pf@wk{compression label}}};}%
+    \pf@ifnolab{\pf@wk{rarefaction label}}{}{\node[anchor=\pf@lla] at (\fpeval{(\pf@cy>=1.75?7:3)*\pf@lam/4*\pf@sx},\pf@lly) {\pf@txtlab{\pf@wk{rarefaction label}}};}%
+    \pf@ifstr{\pf@type}{longitudinal}{%
+      \ifpf@w@lm\draw[line width=0.4pt, dash pattern=on 2pt off 2pt] (\fpeval{\pf@lam/4*\pf@sx},\pf@ly+1.2) -- ++(0,0.5) (\fpeval{5*\pf@lam/4*\pf@sx},\pf@ly+1.2) -- ++(0,0.5);
+        \draw[pf thin arrow, {Stealth[length=5pt,width=4pt]}-{Stealth[length=5pt,width=4pt]}] (\fpeval{\pf@lam/4*\pf@sx},\pf@ly+1.55) -- (\fpeval{5*\pf@lam/4*\pf@sx},\pf@ly+1.55) node[pos=0.5, pf halo]{\pf@lab{\pf@wk{wavelength label}}};\fi
+      \ifpf@w@axes
+        \edef\pf@ay{\fpeval{\pf@ly-0.85}}%
+        \draw[line width=1.1pt] (0,\pf@ay) -- (\pf@W,\pf@ay);
+        \foreach \pf@k in {0,...,\fpeval{round(\pf@X/\pf@xs)}}{\draw[line width=0.5pt] ({\pf@k*\pf@xs*\pf@sx},\pf@ay) -- ++(0,-0.12);}
+        \ifpf@w@num\edef\pf@ne{\pf@wk{number every}}\ifnum\pf@ne>0
+          \foreach \pf@k in {0,\pf@ne,...,\fpeval{round(\pf@X/\pf@xs)}}{\node[font=\pf@wk{number font}, anchor=north, inner sep=2pt] at ({\pf@k*\pf@xs*\pf@sx},\pf@ay-0.1) {\pgfmathprintnumber{\fpeval{\pf@k*\pf@xs}}};}\fi\fi
+        \node[font=\pf@wk{label font}\bfseries, anchor=north] at (\pf@W/2,\pf@ay-0.5) {\pf@axislab{\pf@xtit}};
+      \fi}{}}%
+  \pf@ifnolab{\pf@wk{title}}{}{\node[font=\pf@wk{label font}\bfseries, anchor=south] at (current bounding box.north) {\pf@axislab{\pf@wk{title}}};}%
+  \end{tikzpicture}\endgroup}

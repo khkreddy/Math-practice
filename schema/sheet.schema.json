@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/khkreddy/Math-practice/schema/sheet.schema.json",
+  "title": "Practice sheet",
+  "description": "Student-facing practice sheet. No answer key. The Worker stores the key separately and GET /sheet/:id never returns it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "subject", "total_marks", "instructions", "sections"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$" },
+    "title": { "type": "string" },
+    "subject": { "type": "string" },
+    "total_marks": { "type": "number" },
+    "instructions": { "type": "array", "items": { "type": "string" } },
+    "sections": { "type": "array", "items": { "$ref": "#/$defs/section" } }
+  },
+  "$defs": {
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "marks_scheme", "questions"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "instruction": { "type": "string" },
+        "marks_scheme": { "type": "string" },
+        "questions": { "type": "array", "items": { "$ref": "#/$defs/question" } }
+      }
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "qno", "type", "marks"],
+      "properties": {
+        "id": { "type": "string" },
+        "qno": { "type": "integer" },
+        "type": { "enum": ["mcq", "short", "multi_part", "construction", "word_problem"] },
+        "marks": { "type": "number" },
+        "text": { "type": "string", "description": "Wording as printed. $...$ is KaTeX." },
+        "response": { "enum": ["text", "photo", "short"] },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "text"],
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string" }
+            }
+          }
+        },
+        "figure": { "$ref": "#/$defs/figure" },
+        "parts": { "type": "array", "items": { "$ref": "#/$defs/part" } },
+        "hinges": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Map hinge or unit ids only. Omit, or leave empty, when the ids are not yet confirmed harmless. Do not put map prose here."
+        }
+      }
+    },
+    "part": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text"],
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "marks": { "type": "number" },
+        "response": { "enum": ["text", "photo", "short"] },
+        "figure": { "$ref": "#/$defs/figure" },
+        "parts": { "type": "array", "items": { "$ref": "#/$defs/part" } },
+        "hinges": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "figure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "src", "alt"],
+      "properties": {
+        "id": { "type": "string" },
+        "src": { "type": "string", "description": "Site-relative SVG path, for example figures/q24.svg" },
+        "alt": { "type": "string" }
+      }
+    }
+  }
+}

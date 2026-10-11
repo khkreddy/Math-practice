@@ -1,0 +1,70 @@
+%% ===================================================== free body diagram
+%% \pfFBD[body=block, force={dir=270,label=F_g}, force={dir=90,label=F_N}, ...]
+
+\newif\ifpf@fbd@vel \newif\ifpf@fbd@acc
+\pgfqkeys{/pf/fbd}{
+  body/.initial=dot,            % dot | block | ball | cart
+  unit/.initial=2.3,            % cm drawn for a force of length 1
+  notation/.initial=none,       % none | arrow | bold
+  velocity/.is if=pf@fbd@vel, velocity dir/.initial=0, velocity label/.initial=v,
+  acceleration/.is if=pf@fbd@acc, acceleration dir/.initial=0, acceleration label/.initial=a,
+  mirror/.is if=pf@mirror, color/.is if=pf@color,
+  force/.code={\pf@append\pf@fbd@list{#1}},
+  forces/.code={\foreach \pf@a/\pf@l/\pf@t in {#1}{\xdef\pf@tmp{dir=\pf@a,length=\pf@l,label={\unexpanded\expandafter{\pf@t}}}%
+      \expandafter\pf@append\expandafter\pf@fbd@listg\expandafter{\pf@tmp}\global\let\pf@fbd@listg\pf@fbd@listg}%
+      \let\pf@fbd@list\pf@fbd@listg},
+  scale/.initial=1,
+}
+\pgfqkeys{/pf/force}{dir/.initial=90, length/.initial=1, label/.initial=F, angle mark/.initial=false,
+  angle label/.initial=\theta, color/.initial=, angle mark/.default=true}
+% mirrored angle
+\newcommand\pf@mang[1]{\ifpf@mirror\fpeval{180-(#1)}\else\fpeval{#1}\fi}
+\newcommand\pfFBD[1][]{%
+  \begingroup\let\pf@fbd@list\relax\global\let\pf@fbd@listg\relax
+  \pgfqkeys{/pf/fbd}{#1}%
+  \ifx\pf@fbd@list\relax\pgfqkeys{/pf/fbd}{forces={270/1/F_g, 90/1/F_N}}\fi
+  \edef\pf@notation{\pgfkeysvalueof{/pf/fbd/notation}}%
+  \edef\pf@u{\pgfkeysvalueof{/pf/fbd/unit}}%
+  \edef\pf@body{\pgfkeysvalueof{/pf/fbd/body}}%
+  \begin{tikzpicture}[pf, scale=\pgfkeysvalueof{/pf/fbd/scale}]
+  % ---- body
+  \pf@ifstr{\pf@body}{block}{\draw[pf body, rounded corners=1pt] (-0.56,-0.56) rectangle (0.56,0.56);}{}%
+  \pf@ifstr{\pf@body}{ball}{\draw[pf body] (0,0) circle[radius=0.5];}{}%
+  \pf@ifstr{\pf@body}{cart}{\draw[pf body, rounded corners=3pt] (-0.75,-0.25) rectangle (0.75,0.45);
+     \draw[fill=white, line width=1.1pt] (-0.42,-0.3) circle[radius=0.17] (0.42,-0.3) circle[radius=0.17];}{}%
+  % ---- forces
+  \def\pf@item##1{\advance\count@ 1\relax
+    \pgfqkeys{/pf/force}{dir=90,length=1,label=F,angle mark=false,angle label=\theta,color=,##1}%
+    \edef\pf@d{\pf@mang{\pgfkeysvalueof{/pf/force/dir}}}%
+    \edef\pf@L{\fpeval{\pgfkeysvalueof{/pf/force/length}*\pf@u}}%
+    \edef\pf@col{\pgfkeysvalueof{/pf/force/color}}\ifx\pf@col\@empty\edef\pf@col{\pf@palette{\the\count@}}\fi
+    % forces sharing a direction are drawn side by side
+    \edef\pf@dk{\fpeval{round(\pf@d)}}%
+    \expandafter\ifx\csname pf@fbd@dup@\pf@dk\endcsname\relax\expandafter\gdef\csname pf@fbd@dup@\pf@dk\endcsname{0}\fi
+    \edef\pf@dup{\csname pf@fbd@dup@\pf@dk\endcsname}%
+    \expandafter\xdef\csname pf@fbd@dup@\pf@dk\endcsname{\the\numexpr\pf@dup+1}%
+    \edef\pf@off{\fpeval{0.32*\pf@dup}}%
+    \begin{scope}[shift={(\pf@d-90:\pf@off)}]
+    \draw[pf force, \pf@col] (0,0) -- (\pf@d:\pf@L);
+    \node[anchor=\fpeval{\pf@d+180}, text=\pf@col] at (\pf@d:\pf@L+0.15) {\pf@vlab{\pgfkeysvalueof{/pf/force/label}}};
+    \end{scope}
+    \pf@ifstr{\pgfkeysvalueof{/pf/force/angle mark}}{true}{%
+      % reference = nearest axis
+      \edef\pf@ref{\fpeval{round(\pf@d/90)*90}}%
+      \edef\pf@r{\fpeval{min(0.75*\pf@L,1.1)}}%
+      \draw[line width=0.6pt, dash pattern=on 3pt off 2pt] (\pf@ref:0.2) -- (\pf@ref:\pf@r+0.35);
+      \draw[line width=0.7pt] (\pf@ref:\pf@r) arc[start angle=\pf@ref, end angle=\pf@d, radius=\pf@r];
+      \node at ({(\pf@ref+\pf@d)/2}:\pf@r+0.3) {\pf@lab{\pgfkeysvalueof{/pf/force/angle label}}};}{}%
+  }%
+  \foreach \pf@z in {0,...,359}{\expandafter\global\expandafter\let\csname pf@fbd@dup@\pf@z\endcsname\relax}%
+  \count@=0 \pf@fbd@list
+  \fill (0,0) circle[radius=\pf@ifstr{\pf@body}{dot}{0.09}{0.06}];
+  % ---- motion arrows beside the body
+  \def\pf@side{\ifpf@mirror-\fi 1}%
+  \edef\pf@mx{\fpeval{\pf@side*(\pf@ifstr{\pf@body}{dot}{2.2}{3.0})}}%
+  \ifpf@fbd@vel\ifpf@fbd@acc\def\pf@vy{0.55}\def\pf@ay{-0.55}\else\def\pf@vy{0}\fi\else\def\pf@ay{0}\fi
+  \ifpf@fbd@vel \edef\pf@d{\pf@mang{\pgfkeysvalueof{/pf/fbd/velocity dir}}}%
+    \draw[pf motion, \ifpf@color pfblue\fi] ($(\pf@mx,\pf@vy)+(\pf@d:-0.42)$) -- ++(\pf@d:0.84) node[pos=0.5, anchor=\fpeval{\pf@d-90}, inner sep=4pt]{\pf@vlab{\pgfkeysvalueof{/pf/fbd/velocity label}}};\fi
+  \ifpf@fbd@acc \edef\pf@d{\pf@mang{\pgfkeysvalueof{/pf/fbd/acceleration dir}}}%
+    \draw[pf motion, \ifpf@color pfred\fi] ($(\pf@mx,\pf@ay)+(\pf@d:-0.42)$) -- ++(\pf@d:0.84) node[pos=0.5, anchor=\fpeval{\pf@d-90}, inner sep=4pt]{\pf@vlab{\pgfkeysvalueof{/pf/fbd/acceleration label}}};\fi
+  \end{tikzpicture}\endgroup}

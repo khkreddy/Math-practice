@@ -1,0 +1,166 @@
+%% ===================================================== pulleys
+%% \pfPulley[setup=atwood|table|ramp|tackle, ...]
+\newif\ifpf@p@t \newif\ifpf@p@g \newif\ifpf@p@n
+\pgfqkeys{/pf/pulley}{
+  setup/.initial=atwood,
+  left label/.initial=m_1, right label/.initial=m_2, size/.initial=1,
+  hangs lower/.initial=neither,          % neither | left | right
+  third/.initial=none, third label/.initial=m_3,   % none | left | right
+  table object/.initial=block, table label/.initial=m_1, hanging label/.initial=m_2,
+  ramp object/.initial=block, ramp label/.initial=m_1, angle/.initial=35, angle label/.initial=\theta,
+  surface/.initial=smooth,
+  strands/.initial=3, load label/.initial=m,
+  tension/.is if=pf@p@t, tension label/.initial=T,
+  gravity/.is if=pf@p@g, gravity labels/.initial=auto,
+  gravity label left/.initial=auto, gravity label right/.initial=auto, gravity label third/.initial=auto,
+  normal/.is if=pf@p@n, normal label/.initial=F_N,
+  friction/.initial=none, friction label/.initial=F_f,      % none | toward | away
+  acceleration/.initial=none, acceleration label/.initial=a, % atwood: none|right falls|left falls ; table/ramp: none|falls|rises ; tackle: none|rises|falls
+  mirror/.is if=pf@mirror, color/.is if=pf@color, scale/.initial=1,
+}
+\def\pf@pk#1{\pgfkeysvalueof{/pf/pulley/#1}}
+\tikzset{pf pforce/.style={line width=1.2pt, -{Triangle[length=6.5pt,width=5pt]}},
+         pf rope/.style={line width=0.9pt}}
+% wheel at (#1) radius #2
+\newcommand\pf@wheel[2]{\filldraw[fill=pfbody, line width=1.1pt] (#1) circle[radius=#2];
+  \draw[line width=0.8pt, fill=white] (#1) circle[radius=0.11]; \fill (#1) circle[radius=0.045];}
+% hanging mass with top centre at (#1,#2); label #3; sets \pf@mb (bottom y) and \pf@mc (centre y)
+\newcommand\pf@hmass[3]{\edef\pf@ms{\fpeval{0.75*\pf@pk{size}}}%
+  \edef\pf@mb{\fpeval{#2-\pf@ms}}\edef\pf@mc{\fpeval{#2-\pf@ms/2}}%
+  \filldraw[pf body, line width=1.1pt, rounded corners=1pt] (#1-\pf@ms/2,#2) rectangle (#1+\pf@ms/2,\pf@mb);
+  \node[font=\small] at (#1,\pf@mc) {\pf@lab{#3}};}
+% gravity label: "auto" -> "<mass label>\,g"
+\newcommand\pf@glab[2]{\pf@ifstr{#1}{auto}{\pf@ifnolab{#2}{?}{\pf@ifstr{\detokenize{#2}}{?}{?}{#2\,g}}}{#1}}
+\newcommand\pf@tarrow[4]{% from (#1) direction #2 label #3 label-side #4
+  \ifpf@p@t\draw[pf pforce, \ifpf@color pfteal\fi] (#1) -- ++(#2:0.55) node[pos=1, anchor=\pf@manc{#4}, inner sep=2.5pt]{\pf@lab{#3}};\fi}
+\newcommand\pf@garrow[2]{% from (#1) label #2
+  \ifpf@p@g\draw[pf pforce, \ifpf@color pfred\fi, shorten <=0.375*\pf@pk{size} cm] (#1) -- ++(0,-1.0) node[pos=1, below, inner sep=3pt]{\pf@lab{#2}};\fi}
+\newcommand\pf@garrowside[3]{% from (#1) label #2 at side anchor #3 (used when a rope continues below)
+  \ifpf@p@g\draw[pf pforce, \ifpf@color pfred\fi, shorten <=0.375*\pf@pk{size} cm] (#1) -- ++(0,-1.0) node[pos=0.8, anchor=#3, inner sep=3pt]{\pf@lab{#2}};\fi}
+\newcommand\pf@aarrow[3]{% at (#1) direction #2 label side #3
+  \draw[pf motion, line width=1pt, \ifpf@color pfpurple\fi] ($(#1)+(#2:-0.3)$) -- ++(#2:0.6) node[pos=0.5, anchor=\pf@manc{#3}, inner sep=3pt]{\pf@lab{\pf@pk{acceleration label}}};}
+\newcommand\pf@ceiling[2]{\draw[line width=1.1pt] (#1,0) -- (#2,0); \edef\pf@cb{\fpeval{#1+0.2}}\foreach \pf@k in {#1,\pf@cb,...,#2}{\draw[line width=0.5pt] (\pf@k,0) -- ++(0.15,0.15);}}
+\newcommand\pfPulley[1][]{%
+  \begingroup\pgfqkeys{/pf/pulley}{#1}%
+  \edef\pf@setup{\pf@pk{setup}}\def\pf@R{0.5}%
+  \begin{tikzpicture}[pf, scale=\pf@pk{scale}]
+  \begin{scope}[xscale=\ifpf@mirror -1\else 1\fi]
+  \pf@ifstr{\pf@setup}{atwood}{\pf@atwood}{}%
+  \pf@ifstr{\pf@setup}{table}{\pf@ptable}{}%
+  \pf@ifstr{\pf@setup}{ramp}{\pf@pramp}{}%
+  \pf@ifstr{\pf@setup}{tackle}{\pf@tackle}{}%
+  \end{scope}
+  \end{tikzpicture}\endgroup}
+%% ---- Atwood machine
+\newcommand\pf@atwood{%
+  \pf@ceiling{-1.4}{1.4}\draw[line width=1.1pt] (0,0) -- (0,-0.6);
+  \coordinate (pc) at (0,-1.1);
+  \edef\pf@yl{\pf@ifstr{\pf@pk{hangs lower}}{left}{-3.9}{\pf@ifstr{\pf@pk{hangs lower}}{right}{-2.9}{-3.3}}}%
+  \edef\pf@yr{\pf@ifstr{\pf@pk{hangs lower}}{right}{-3.9}{\pf@ifstr{\pf@pk{hangs lower}}{left}{-2.9}{-3.3}}}%
+  \pf@ifstr{\pf@pk{third}}{none}{\def\pf@T{\pf@pk{tension label}}\def\pf@Tb{}}{\def\pf@T{T_1}\def\pf@Tb{T_2}}%
+  \draw[pf rope] (-\pf@R,-1.1) -- (-\pf@R,\pf@yl) (\pf@R,-1.1) -- (\pf@R,\pf@yr);
+  \draw[pf rope] (-\pf@R,-1.1) arc[start angle=180,end angle=0,radius=\pf@R];
+  \pf@wheel{pc}{\pf@R}
+  % masses
+  \pf@hmass{-\pf@R}{\pf@yl}{\pf@pk{left label}}\edef\pf@lc{\pf@mc}\edef\pf@lb{\pf@mb}%
+  \pf@hmass{\pf@R}{\pf@yr}{\pf@pk{right label}}\edef\pf@rc{\pf@mc}\edef\pf@rb{\pf@mb}%
+  \pf@tarrow{-\pf@R,\pf@yl}{90}{\pf@T}{180}\pf@tarrow{\pf@R,\pf@yr}{90}{\pf@T}{0}%
+  \pf@tarrow{-\pf@R,-1.2}{-90}{\pf@T}{180}\pf@tarrow{\pf@R,-1.2}{-90}{\pf@T}{0}%
+  \pf@ifstr{\pf@pk{third}}{none}{}{%
+    \edef\pf@tx{\pf@ifstr{\pf@pk{third}}{left}{-\pf@R}{\pf@R}}\edef\pf@tt{\pf@ifstr{\pf@pk{third}}{left}{\pf@lb}{\pf@rb}}%
+    \edef\pf@ty{\fpeval{\pf@tt-1.8}}\draw[pf rope] (\pf@tx,\pf@tt) -- (\pf@tx,\pf@ty);
+    \pf@hmass{\pf@tx}{\pf@ty}{\pf@pk{third label}}\edef\pf@thc{\pf@mc}%
+    \edef\pf@os{\pf@ifstr{\pf@pk{third}}{left}{-1}{1}}%
+    \pf@tarrow{\pf@tx,\pf@ty}{90}{\pf@Tb}{\pf@ifstr{\pf@pk{third}}{left}{0}{180}}\pf@tarrow{\pf@tx,\pf@tt}{-90}{\pf@Tb}{\pf@ifstr{\pf@pk{third}}{left}{0}{180}}%
+    \pf@garrow{\pf@tx,\pf@thc}{\pf@glab{\pf@pk{gravity label third}}{\pf@pk{third label}}}}%
+  \pf@ifstr{\pf@pk{third}}{left}{\pf@garrowside{-\pf@R-0.22,\pf@lc}{\pf@glab{\pf@pk{gravity label left}}{\pf@pk{left label}}}{east}}%
+    {\pf@garrow{-\pf@R,\pf@lc}{\pf@glab{\pf@pk{gravity label left}}{\pf@pk{left label}}}}%
+  \pf@ifstr{\pf@pk{third}}{right}{\pf@garrowside{\pf@R+0.22,\pf@rc}{\pf@glab{\pf@pk{gravity label right}}{\pf@pk{right label}}}{west}}%
+    {\pf@garrow{\pf@R,\pf@rc}{\pf@glab{\pf@pk{gravity label right}}{\pf@pk{right label}}}}%
+  \pf@ifstr{\pf@pk{acceleration}}{none}{}{\edef\pf@s{\pf@ifstr{\pf@pk{acceleration}}{right falls}{1}{-1}}%
+    \pf@aarrow{-\pf@R-0.75,\pf@lc}{\fpeval{\pf@s*90}}{180}\pf@aarrow{\pf@R+0.75,\pf@rc}{\fpeval{-\pf@s*90}}{0}%
+    \pf@ifstr{\pf@pk{third}}{none}{}{\pf@aarrow{\pf@tx+0.75,\pf@thc}{\fpeval{(\pf@ifstr{\pf@pk{third}}{left}{1}{-1})*\pf@s*90}}{0}}}}
+%% ---- block on table, hanging mass
+\newcommand\pf@ptable{%
+  \pf@ground{-5,0}{1.6,0}%
+  \filldraw[fill=pframp, line width=1pt] (-4.6,2.6) rectangle (0,2.8);
+  \draw[line width=1pt, fill=pframp] (-4.4,0) rectangle (-4.2,2.6) (-0.4,0) rectangle (-0.2,2.6);
+  \pf@ifstr{\pf@pk{surface}}{rough}{\foreach \pf@k in {-4.5,-4.3,...,-0.1}{\draw[line width=0.5pt] (\pf@k,2.8) -- ++(0.12,0.12);}}{}%
+  \draw[line width=1pt] (0,2.7) -- (0.45,3.15);
+  \coordinate (pc) at (0.45,3.15+0.0);
+  \edef\pf@ty{\fpeval{3.15+\pf@R}}%
+  \begin{scope}[shift={(-2.3,2.8)}]\pf@object{\pf@pk{table object}}{\pf@pk{size}}{\pf@pk{table label}}\end{scope}
+  \edef\pf@hw{\fpeval{\pf@ifstr{\pf@pk{table object}}{cart}{0.62}{0.45}*\pf@pk{size}}}\edef\pf@bc{\fpeval{2.8+\pf@oh/2}}%
+  \draw[pf rope] (-2.3+\pf@hw,\pf@ty) -- (0.45,\pf@ty) arc[start angle=90,end angle=0,radius=\pf@R] -- (0.45+\pf@R,2.2);
+  \pf@wheel{pc}{\pf@R}
+  \pf@hmass{0.45+\pf@R}{2.2}{\pf@pk{hanging label}}\edef\pf@hc{\pf@mc}%
+  \pf@tarrow{-2.3+\pf@hw,\pf@ty}{0}{\pf@pk{tension label}}{90}\pf@tarrow{-0.1,\pf@ty}{180}{\pf@pk{tension label}}{90}%
+  \pf@tarrow{0.45+\pf@R,2.2}{90}{\pf@pk{tension label}}{0}\pf@tarrow{0.45+\pf@R,3.0}{-90}{\pf@pk{tension label}}{0}%
+  \pf@garrow{-2.3,\pf@bc}{\pf@glab{\pf@pk{gravity label left}}{\pf@pk{table label}}}%
+  \pf@garrow{0.45+\pf@R,\pf@hc}{\pf@glab{\pf@pk{gravity label right}}{\pf@pk{hanging label}}}%
+  \ifpf@p@n\draw[pf pforce, \ifpf@color pfblue\fi] (-2.3,\pf@bc) -- ++(0,1.1) node[above]{\pf@lab{\pf@pk{normal label}}};\fi
+  \pf@ifstr{\pf@pk{friction}}{none}{}{\edef\pf@s{\pf@ifstr{\pf@pk{friction}}{toward}{1}{-1}}%
+    \draw[pf pforce, \ifpf@color pforange\fi] (-2.3+\pf@s*\pf@hw,2.95) -- ++(\pf@s*0.9,0) node[pos=1, anchor=\pf@manc{\pf@s>0?0:180}, inner sep=2pt]{\pf@lab{\pf@pk{friction label}}};}%
+  \pf@ifstr{\pf@pk{acceleration}}{none}{}{\edef\pf@s{\pf@ifstr{\pf@pk{acceleration}}{falls}{1}{-1}}%
+    \pf@aarrow{-2.3+0.6,\pf@bc+\pf@oh/2+0.35}{\fpeval{\pf@s>0?0:180}}{90}\pf@aarrow{0.45+\pf@R+0.7,\pf@hc}{\fpeval{\pf@s>0?-90:90}}{0}}}
+%% ---- block on ramp, hanging mass
+\newcommand\pf@pramp{%
+  \edef\pf@a{\pf@pk{angle}}\edef\pf@Hh{3.6}\edef\pf@B{\fpeval{\pf@Hh/tand(\pf@a)}}%
+  \pf@ground{-0.6,0}{\pf@B+1.5,0}%
+  \filldraw[fill=pframp, line width=1.1pt] (0,0) -- (\pf@B,\pf@Hh) -- (\pf@B,0) -- cycle;
+  \pf@ifnolab{\pf@pk{angle label}}{}{\draw[line width=0.7pt] (0.8,0) arc[start angle=0,end angle=\pf@a,radius=0.8];
+     \node[anchor=\pf@manc{0}] at ({\pf@a/2}:0.95) {\pf@lab{\pf@pk{angle label}}};}%
+  \coordinate (pc) at ($(\pf@B,\pf@Hh)+(\pf@a+90:\pf@R)+(\pf@a:0.15)$);
+  \draw[line width=1pt] (\pf@B,\pf@Hh) -- (pc);
+  \edef\pf@s{\fpeval{0.5*\pf@Hh/sind(\pf@a)}}%
+  \begin{scope}[shift={(\pf@a:\pf@s)}, rotate=\pf@a]
+    \pf@object{\pf@pk{ramp object}}{\pf@pk{size}}{\pf@pk{ramp label}}%
+    \edef\pf@hw{\fpeval{\pf@ifstr{\pf@pk{ramp object}}{cart}{0.62}{0.45}*\pf@pk{size}}}%
+    \draw[pf rope] (\pf@hw,\pf@R) -- ($(\pf@s,0)+(0,\pf@R)$);  % rope parallel to slope (tangent to wheel top)
+    \pf@tarrow{\pf@hw,\pf@R}{\pf@a}{\pf@pk{tension label}}{\pf@a+90}%
+    \ifpf@p@n\draw[pf pforce, \ifpf@color pfblue\fi] (0,\pf@oh/2) -- (0,\pf@oh/2+1.1);
+      \pf@labat{0,\pf@oh/2+1.2}{\pf@a+90}{\pf@lab{\pf@pk{normal label}}}\fi
+    \ifpf@p@g\draw[pf pforce, \ifpf@color pfred\fi] (0,\pf@oh/2) -- ++(-90-\pf@a:1.0);
+      \pf@labat{$(0,\pf@oh/2)+(-90-\pf@a:1.1)$}{-90}{\pf@lab{\pf@glab{\pf@pk{gravity label left}}{\pf@pk{ramp label}}}}\fi
+    \pf@ifstr{\pf@pk{acceleration}}{none}{}{\edef\pf@ss{\pf@ifstr{\pf@pk{acceleration}}{falls}{1}{-1}}%
+      \draw[pf motion, line width=1pt] (-0.3*\pf@ss,\pf@oh+0.4) -- (0.3*\pf@ss,\pf@oh+0.4);}
+  \end{scope}
+  \draw[pf rope] ($(pc)+(\pf@a+90:\pf@R)$) arc[start angle=\pf@a+90, end angle=0, radius=\pf@R] -- ++(0,-2.0);
+  \pf@tarrow{$(pc)+(\pf@a+90:\pf@R)+(\pf@a:-0.1)$}{\pf@a+180}{\pf@pk{tension label}}{\pf@a+90}%
+  \pf@wheel{pc}{\pf@R}
+  \path (pc) ++(\pf@R,0) coordinate (rr);
+  \path (rr) ++(0,-2.0) coordinate (hm);
+  \pgfgetlastxy{\pf@hx}{\pf@hy}%
+  \path let \p1=(hm) in \pgfextra{\pgfmathsetmacro\pf@hx{\x1/28.4528}\pgfmathsetmacro\pf@hy{\y1/28.4528}\global\let\pf@hxg\pf@hx\global\let\pf@hyg\pf@hy};
+  \pf@hmass{\pf@hxg}{\pf@hyg}{\pf@pk{hanging label}}%
+  \pf@tarrow{\pf@hxg,\pf@hyg}{90}{\pf@pk{tension label}}{0}\pf@tarrow{$(rr)+(0,-0.1)$}{-90}{\pf@pk{tension label}}{0}%
+  \pf@garrow{\pf@hxg,\pf@mc}{\pf@glab{\pf@pk{gravity label right}}{\pf@pk{hanging label}}}%
+  \pf@ifstr{\pf@pk{acceleration}}{none}{}{\pf@aarrow{\pf@hxg+0.7,\pf@mc}{\pf@ifstr{\pf@pk{acceleration}}{falls}{-90}{90}}{0}}}
+%% ---- block and tackle with n supporting strands
+\newcommand\pf@tackle{%
+  \edef\pf@n{\pf@pk{strands}}\def\pf@r{0.3}\def\pf@d{0.6}%
+  \edef\pf@yt{-0.9}\edef\pf@yb{-3.2}%
+  \pf@ceiling{-1.2}{\fpeval{\pf@n*\pf@d+0.6}}%
+  % strands 0..n ; strand i at x=i*d ; top pulleys join (0,1),(2,3).. ; bottom pulleys join (1,2),(3,4)..
+  \foreach \pf@i in {1,...,\pf@n}{\draw[pf rope] (\pf@i*\pf@d,\pf@yt) -- (\pf@i*\pf@d,\pf@yb);}
+  \draw[pf rope] (0,\pf@yt) -- (0,-4.6);
+  \edef\pf@last{\fpeval{\pf@n*\pf@d}}%
+  \pgfmathtruncatemacro\pf@ntop{(\pf@n+1)/2}\pgfmathtruncatemacro\pf@nbot{\pf@n/2}%
+  \foreach \pf@i in {1,...,\pf@ntop}{\edef\pf@x{\fpeval{(2*\pf@i-1.5)*\pf@d}}%
+     \draw[line width=1pt] (\pf@x,0) -- (\pf@x,\pf@yt);
+     \draw[pf rope] (\pf@x-\pf@r,\pf@yt) arc[start angle=180,end angle=0,radius=\pf@r];\pf@wheel{\pf@x,\pf@yt}{\pf@r}}
+  \ifnum\pf@nbot>0 \foreach \pf@i in {1,...,\pf@nbot}{\edef\pf@x{\fpeval{(2*\pf@i-0.5)*\pf@d}}%
+     \draw[pf rope] (\pf@x-\pf@r,\pf@yb) arc[start angle=180,end angle=360,radius=\pf@r];\pf@wheel{\pf@x,\pf@yb}{\pf@r}
+     \draw[line width=1pt] (\pf@x,\pf@yb) -- (\pf@x,\pf@yb-0.6);}\fi
+  % rope anchor of the last strand
+  \ifodd\pf@n \fill (\pf@last,\pf@yb-0.6) circle[radius=0.05]; \draw[pf rope] (\pf@last,\pf@yb) -- (\pf@last,\pf@yb-0.6);
+  \else \draw[line width=1pt] (\pf@last,\pf@yt) -- (\pf@last,0);\fi
+  % load bar and load
+  \draw[line width=2pt] (0.3*\pf@d,\pf@yb-0.6) -- (\pf@last+0.2,\pf@yb-0.6);
+  \edef\pf@lx{\fpeval{(\pf@n*\pf@d+0.3*\pf@d)/2+0.1}}\draw[pf rope] (\pf@lx,\pf@yb-0.6) -- (\pf@lx,\pf@yb-0.9);
+  \pf@hmass{\pf@lx}{\fpeval{\pf@yb-0.9}}{\pf@pk{load label}}\edef\pf@hc{\pf@mc}%
+  \pf@tarrow{0,-4.6}{-90}{\pf@pk{tension label}}{180}%
+  \foreach \pf@i in {1,...,\pf@n}{\pf@tarrow{\pf@i*\pf@d,\pf@yb+0.45}{90}{}{0}}%
+  \ifpf@p@t\node[anchor=west] at (\pf@last+0.2,\pf@yb+0.8) {\pf@lab{\pf@pk{tension label}}};\fi
+  \pf@garrow{\pf@lx,\pf@hc}{\pf@glab{\pf@pk{gravity label left}}{\pf@pk{load label}}}%
+  \pf@ifstr{\pf@pk{acceleration}}{none}{}{\pf@aarrow{\pf@lx+0.8,\pf@hc}{\pf@ifstr{\pf@pk{acceleration}}{rises}{90}{-90}}{0}}}

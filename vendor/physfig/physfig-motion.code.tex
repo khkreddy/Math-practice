@@ -1,0 +1,142 @@
+%% ===================================================== motion graphs
+%% \pfMotionGraph[segments={faster/4/2, forward, slower/0/2, rest}, graphs=pt|vt|at|all, letters, styles, tangent at=4]
+\newif\ifpf@mg@let \newif\ifpf@mg@sty \newif\ifpf@mg@num \newif\ifpf@mg@grid
+\pgfqkeys{/pf/motion}{
+  segments/.code={\gdef\pf@mg@listg{}\foreach \pf@seg in {#1}{\expandafter\pf@mg@parse\pf@seg////\pf@end}\global\let\pf@mg@list\pf@mg@listg},
+  segment/.code={\pgfqkeys{/pf/mgseg}{type=rest,v=,t=,dir=,#1}%
+     \xdef\pf@mg@listg{\unexpanded\expandafter{\pf@mg@listg}\noexpand\pf@mg@item{\pgfkeysvalueof{/pf/mgseg/type}}{\pgfkeysvalueof{/pf/mgseg/v}}{\pgfkeysvalueof{/pf/mgseg/t}}{\pgfkeysvalueof{/pf/mgseg/dir}}}},
+  graphs/.initial=pt,                 % pt | vt | at | all
+  start/.initial=0,                   % starting position (m)
+  letters/.is if=pf@mg@let, styles/.is if=pf@mg@sty,
+  tangent at/.initial=,               % time (s) of a tangent to the x-t graph, empty = none
+  numbers/.is if=pf@mg@num, gridlines/.is if=pf@mg@grid,
+  title/.initial=, time title/.initial=Time (s), position title/.initial=Position (m),
+  velocity title/.initial=Velocity (m/s), acceleration title/.initial=Acceleration (m/s\textsuperscript{2}),
+  tmax/.initial=, ymin/.initial=, ymax/.initial=, ystep/.initial=,   % "set the ranges myself"
+  width/.initial=8.5, height/.initial=4.2, stacked height/.initial=3.2,
+  label font/.initial=\small\sffamily, number font/.initial=\footnotesize\sffamily,
+  color/.is if=pf@color, scale/.initial=1,
+}
+\pgfqkeys{/pf/mgseg}{type/.initial=rest, v/.initial=, t/.initial=, dir/.initial=}
+\def\pf@mg@parse#1/#2/#3/#4/#5\pf@end{\xdef\pf@mg@listg{\unexpanded\expandafter{\pf@mg@listg}\noexpand\pf@mg@item{\zap@space#1 \@empty}{#2}{#3}{#4}}}
+\def\pf@mk#1{\pgfkeysvalueof{/pf/motion/#1}}
+\def\pf@sv#1#2#3{\expandafter\xdef\csname pf@mg@#1@#2\endcsname{#3}}
+\def\pf@gv#1#2{\csname pf@mg@#1@#2\endcsname}
+% nice step for a range r and at most #2 intervals
+\newcommand\pf@nicestep[2]{\edef\pf@ns{1}%
+  \foreach \pf@cand in {0.1,0.2,0.25,0.5,1,2,2.5,5,10,20,25,50,100,200,250,500,1000}{%
+    \ifdim\fpeval{(#1)/\pf@cand}pt<\fpeval{#2+0.001}pt\relax\xdef\pf@nsg{\pf@cand}\breakforeach\fi}\let\pf@ns\pf@nsg}
+\newcommand\pf@mg@compute{%
+  \gdef\pf@mg@n{0}\xdef\pf@mg@tt{0}\xdef\pf@mg@v{0}\xdef\pf@mg@x{\pf@mk{start}}%
+  \xdef\pf@mg@xmin{\pf@mg@x}\xdef\pf@mg@xmax{\pf@mg@x}\gdef\pf@mg@vmin{0}\gdef\pf@mg@vmax{0}\gdef\pf@mg@amin{0}\gdef\pf@mg@amax{0}%
+  \def\pf@mg@item##1##2##3##4{%
+    \xdef\pf@mg@n{\the\numexpr\pf@mg@n+1}%
+    \edef\pf@ty{##1}\edef\pf@vv{##2}\edef\pf@dt{##3}\edef\pf@dd{##4}%
+    \edef\pf@cur{\fpeval{abs(\pf@mg@v)}}\edef\pf@sg{\fpeval{\pf@mg@v<0?-1:1}}%
+    \pf@ifstr{\pf@dd}{back}{\def\pf@sg{-1}}{}\pf@ifstr{\pf@dd}{forward}{\def\pf@sg{1}}{}%
+    \pf@ifstr{\pf@ty}{rest}{\edef\pf@va{0}\edef\pf@vb{0}\pf@ifstr{\pf@dt}{}{\def\pf@dt{2}}{}}{}%
+    \pf@ifstr{\pf@ty}{forward}{\pf@ifstr{\pf@vv}{}{\edef\pf@vv{\fpeval{\pf@cur>0?\pf@cur:2}}}{}\edef\pf@va{\pf@vv}\edef\pf@vb{\pf@vv}\pf@ifstr{\pf@dt}{}{\def\pf@dt{3}}{}}{}%
+    \pf@ifstr{\pf@ty}{back}{\pf@ifstr{\pf@vv}{}{\edef\pf@vv{\fpeval{\pf@cur>0?\pf@cur:2}}}{}\edef\pf@va{\fpeval{-\pf@vv}}\edef\pf@vb{\pf@va}\pf@ifstr{\pf@dt}{}{\def\pf@dt{3}}{}}{}%
+    \pf@ifstr{\pf@ty}{faster}{\pf@ifstr{\pf@vv}{}{\edef\pf@vv{\fpeval{\pf@cur+2}}}{}\edef\pf@va{\pf@mg@v}\edef\pf@vb{\fpeval{\pf@sg*\pf@vv}}\pf@ifstr{\pf@dt}{}{\def\pf@dt{2}}{}}{}%
+    \pf@ifstr{\pf@ty}{slower}{\pf@ifstr{\pf@vv}{}{\edef\pf@vv{0}}{}\edef\pf@va{\pf@mg@v}\edef\pf@vb{\fpeval{\pf@sg*\pf@vv}}\pf@ifstr{\pf@dt}{}{\def\pf@dt{2}}{}}{}%
+    \edef\pf@acc{\fpeval{(\pf@vb-\pf@va)/\pf@dt}}%
+    \pf@sv{t0}{\pf@mg@n}{\pf@mg@tt}\pf@sv{dt}{\pf@mg@n}{\pf@dt}\pf@sv{v0}{\pf@mg@n}{\pf@va}\pf@sv{v1}{\pf@mg@n}{\pf@vb}%
+    \pf@sv{x0}{\pf@mg@n}{\pf@mg@x}\pf@sv{a}{\pf@mg@n}{\pf@acc}%
+    \edef\pf@xe{\fpeval{\pf@mg@x+(\pf@va+\pf@vb)/2*\pf@dt}}%
+    \edef\pf@xs{\fpeval{(\pf@va*\pf@vb<0)?\pf@mg@x-(\pf@va)^2/(2*(abs(\pf@acc)<1e-9?1e-9:\pf@acc)):\pf@xe}}%
+    \xdef\pf@mg@xmin{\fpeval{min(\pf@mg@xmin,\pf@xe,\pf@xs)}}\xdef\pf@mg@xmax{\fpeval{max(\pf@mg@xmax,\pf@xe,\pf@xs)}}%
+    \xdef\pf@mg@vmin{\fpeval{min(\pf@mg@vmin,\pf@va,\pf@vb)}}\xdef\pf@mg@vmax{\fpeval{max(\pf@mg@vmax,\pf@va,\pf@vb)}}%
+    \xdef\pf@mg@amin{\fpeval{min(\pf@mg@amin,\pf@acc)}}\xdef\pf@mg@amax{\fpeval{max(\pf@mg@amax,\pf@acc)}}%
+    \xdef\pf@mg@tt{\fpeval{\pf@mg@tt+\pf@dt}}\xdef\pf@mg@v{\pf@vb}\xdef\pf@mg@x{\pf@xe}}%
+  \pf@mg@list
+  \pf@sv{t0}{\the\numexpr\pf@mg@n+1}{\pf@mg@tt}\pf@sv{x0}{\the\numexpr\pf@mg@n+1}{\pf@mg@x}\pf@sv{v0}{\the\numexpr\pf@mg@n+1}{\pf@mg@v}}
+\tikzset{pf seg 0/.style={}, pf seg 1/.style={}, pf seg 2/.style={dash pattern=on 6pt off 3pt}, pf seg 3/.style={dash pattern=on 1pt off 3pt},
+  pf seg 4/.style={dash pattern=on 7pt off 2.5pt on 1pt off 2.5pt}, pf seg 5/.style={dash pattern=on 3.5pt off 2.5pt}}
+\def\pf@mg@dash#1{pf seg \ifpf@mg@sty\fpeval{#1-5*trunc((#1-1)/5)}\else 0\fi}
+% one panel.  #1 = kind (x|v|a), #2 = y offset (cm), #3 = height, #4 = y title, #5 = show time numbers/title (1/0)
+\newcommand\pf@mg@panel[5]{%
+  \edef\pf@W{\pf@mk{width}}\edef\pf@Hp{#3}%
+  \edef\pf@T{\pf@mk{tmax}}\pf@ifstr{\pf@T}{}{\edef\pf@T{\fpeval{ceil(\pf@mg@tt)}}}{}%
+  \pf@nicestep{\pf@T}{16}\edef\pf@ts{\fpeval{(\pf@T>=3 && \pf@ns<1)?1:\pf@ns}}%
+  \edef\pf@lo{\csname pf@mg@#1min\endcsname}\edef\pf@hi{\csname pf@mg@#1max\endcsname}%
+  \edef\pf@lo{\fpeval{min(\pf@lo,0)}}\edef\pf@hi{\fpeval{max(\pf@hi,0)}}%
+  \ifdim\fpeval{\pf@hi-\pf@lo}pt<0.001pt\edef\pf@hi{\fpeval{\pf@hi+1}}\edef\pf@lo{\fpeval{\pf@lo-1}}\fi
+  \edef\pf@ys{\pf@mk{ystep}}\pf@ifstr{\pf@ys}{}{\pf@nicestep{\pf@hi-\pf@lo}{7}\let\pf@ys\pf@ns}{}%
+  \edef\pf@lo{\fpeval{floor(\pf@lo/\pf@ys-0.0001)*\pf@ys}}\edef\pf@hi{\fpeval{ceil(\pf@hi/\pf@ys+0.0001)*\pf@ys}}%
+  \pf@ifstr{#1}{x}{\edef\pf@lo{\fpeval{max(\pf@lo,min(0,\pf@mg@xmin))}}}{}%
+  \edef\pf@tmp{\pf@mk{ymin}}\pf@ifstr{\pf@tmp}{}{}{\pf@ifstr{#1}{x}{\let\pf@lo\pf@tmp}{}}%
+  \edef\pf@tmp{\pf@mk{ymax}}\pf@ifstr{\pf@tmp}{}{}{\pf@ifstr{#1}{x}{\let\pf@hi\pf@tmp}{}}%
+  \edef\pf@sx{\fpeval{\pf@W/\pf@T}}\edef\pf@sy{\fpeval{\pf@Hp/(\pf@hi-\pf@lo)}}%
+  \edef\pf@nlines{\fpeval{round((\pf@hi-\pf@lo)/\pf@ys)}}%
+  \begin{scope}[yshift=#2cm]
+  \ifpf@mg@grid
+    \foreach \pf@tk in {0,\pf@ts,...,\pf@T}{\draw[pfgrid, line width=0.4pt] ({\pf@tk*\pf@sx},0) -- ++(0,\pf@Hp);}
+    \foreach \pf@yk in {0,...,\pf@nlines}{\draw[pfgrid, line width=0.4pt] (0,{\pf@yk*\pf@ys*\pf@sy}) -- ++(\pf@W,0);}
+  \fi
+  \edef\pf@zero{\fpeval{-\pf@lo*\pf@sy}}%
+  \draw[line width=1.2pt] (0,0) -- (0,\pf@Hp);
+  \draw[line width=1.2pt] (0,\pf@zero) -- (\pf@W,\pf@zero);
+  \ifpf@mg@num
+    \foreach \pf@tk in {0,\pf@ts,...,\pf@T}{\node[font=\pf@mk{number font}, anchor=north, inner sep=2pt] at ({\pf@tk*\pf@sx},\pf@zero) {\pgfmathprintnumber{\pf@tk}};}
+    \foreach \pf@yk in {0,...,\pf@nlines}{\edef\pf@yv{\fpeval{\pf@lo+\pf@yk*\pf@ys}}%
+      \ifdim\fpeval{abs(\pf@yv)}pt>0.0001pt\node[font=\pf@mk{number font}, anchor=east, inner sep=3pt] at (0,{\pf@yk*\pf@ys*\pf@sy}) {\pgfmathprintnumber{\pf@yv}};\fi}
+  \fi
+  \node[font=\pf@mk{label font}\bfseries, rotate=90, anchor=south] at (\ifpf@mg@num -0.75\else -0.25\fi,\pf@Hp/2) {\pf@axislab{#4}};
+  \ifnum#5=1 \node[font=\pf@mk{label font}\bfseries, anchor=north] at (\pf@W/2,\fpeval{min(0,\pf@zero)-(\ifpf@mg@num 0.5\else 0.2\fi)}) {\pf@axislab{\pf@mk{time title}}};\fi
+  % curves
+  \foreach \pf@i in {1,...,\pf@mg@n}{%
+    \edef\pf@tz{\pf@gv{t0}{\pf@i}}\edef\pf@d{\pf@gv{dt}{\pf@i}}\edef\pf@va{\pf@gv{v0}{\pf@i}}\edef\pf@vb{\pf@gv{v1}{\pf@i}}\edef\pf@xz{\pf@gv{x0}{\pf@i}}\edef\pf@ac{\pf@gv{a}{\pf@i}}%
+    \edef\pf@st{\pf@mg@dash{\pf@i}}%
+    \pf@ifstr{#1}{x}{\draw[line width=1.6pt, \pf@st, \ifpf@color pfblue\fi] plot[domain=0:\pf@d, samples=25, smooth] ({(\pf@tz+\x)*\pf@sx},{(\pf@xz+\pf@va*\x+0.5*\pf@ac*\x*\x-\pf@lo)*\pf@sy});}{}%
+    \pf@ifstr{#1}{v}{\draw[line width=1.6pt, \pf@st, \ifpf@color pfred\fi] ({\pf@tz*\pf@sx},{(\pf@va-\pf@lo)*\pf@sy}) -- ({(\pf@tz+\pf@d)*\pf@sx},{(\pf@vb-\pf@lo)*\pf@sy});}{}%
+    \pf@ifstr{#1}{a}{\draw[line width=1.6pt, \pf@st, \ifpf@color pfgreen\fi] ({\pf@tz*\pf@sx},{(\pf@ac-\pf@lo)*\pf@sy}) -- ({(\pf@tz+\pf@d)*\pf@sx},{(\pf@ac-\pf@lo)*\pf@sy});
+       \ifnum\pf@i>1 \edef\pf@pa{\pf@gv{a}{\the\numexpr\pf@i-1}}\draw[line width=0.7pt, dash pattern=on 1pt off 1.5pt] ({\pf@tz*\pf@sx},{(\pf@pa-\pf@lo)*\pf@sy}) -- ({\pf@tz*\pf@sx},{(\pf@ac-\pf@lo)*\pf@sy});\fi}{}%
+  }
+  % letters at segment ends
+  \ifpf@mg@let\pgfmathtruncatemacro\pf@np{\pf@mg@n+1}%
+    \foreach \pf@i in {1,...,\pf@np}{%
+      \edef\pf@tz{\pf@gv{t0}{\pf@i}}%
+      \pf@ifstr{#1}{x}{\edef\pf@yy{\pf@gv{x0}{\pf@i}}}{}\pf@ifstr{#1}{v}{\edef\pf@yy{\pf@gv{v0}{\pf@i}}}{}%
+      \pf@ifstr{#1}{a}{\edef\pf@yy{\pf@gv{a}{\fpeval{min(\pf@i,\pf@mg@n)}}}}{}%
+      \filldraw[draw=white, line width=0.6pt] ({\pf@tz*\pf@sx},{(\pf@yy-\pf@lo)*\pf@sy}) circle[radius=0.09];
+      \node[font=\pf@mk{label font}\bfseries, pf halo, anchor=south east] at ({\pf@tz*\pf@sx},{(\pf@yy-\pf@lo)*\pf@sy+0.08}) {\symbol{\numexpr 64+\pf@i}};}%
+  \fi
+  % tangent
+  \pf@ifstr{#1}{x}{\edef\pf@tg{\pf@mk{tangent at}}\pf@ifstr{\pf@tg}{}{}{\pf@mg@tangent}}{}%
+  \end{scope}}
+\newcommand\pf@axislabX[1]{\pf@ifstr{\detokenize{#1}}{?}{\rule{6em}{0.5pt}}{#1}}
+\ExplSyntaxOn
+\cs_new:Npn \pf@axislab #1 { \exp_args:Nf \pf@axislabX {#1} }
+\cs_new:Npn \pf@txtlab #1 { \exp_args:Nf \pf@txtlabX {#1} }
+\ExplSyntaxOff
+\newcommand\pf@txtlabX[1]{\pf@ifstr{\detokenize{#1}}{?}{\rule[-0.2ex]{4em}{0.5pt}}{#1}}
+\newcommand\pf@mg@tangent{%
+  \foreach \pf@i in {1,...,\pf@mg@n}{%
+    \edef\pf@tz{\pf@gv{t0}{\pf@i}}\edef\pf@d{\pf@gv{dt}{\pf@i}}%
+    \ifdim\pf@tg pt>\fpeval{\pf@tz-0.00001}pt\relax\ifdim\pf@tg pt<\fpeval{\pf@tz+\pf@d+0.00001}pt\relax
+      \edef\pf@tau{\fpeval{\pf@tg-\pf@tz}}%
+      \edef\pf@xp{\fpeval{\pf@gv{x0}{\pf@i}+\pf@gv{v0}{\pf@i}*\pf@tau+0.5*\pf@gv{a}{\pf@i}*(\pf@tau)^2}}%
+      \edef\pf@vp{\fpeval{\pf@gv{v0}{\pf@i}+\pf@gv{a}{\pf@i}*\pf@tau}}%
+      \begin{scope}\clip (0,0) rectangle (\pf@W,\pf@Hp);
+      \draw[line width=1pt, \ifpf@color pforange\fi] ({(\pf@tg-3)*\pf@sx},{(\pf@xp-3*\pf@vp-\pf@lo)*\pf@sy}) -- ({(\pf@tg+3)*\pf@sx},{(\pf@xp+3*\pf@vp-\pf@lo)*\pf@sy});
+      \end{scope}
+      \fill ({\pf@tg*\pf@sx},{(\pf@xp-\pf@lo)*\pf@sy}) circle[radius=0.08];
+      \breakforeach
+    \fi\fi}}
+\newcommand\pfMotionGraph[1][]{%
+  \begingroup\gdef\pf@mg@listg{}\pgfqkeys{/pf/motion}{numbers=true, gridlines=true, segments={faster/4/2, forward, slower/0/2, rest}, #1}%
+  \pf@mg@compute
+  \edef\pf@g{\pf@mk{graphs}}%
+  \begin{tikzpicture}[pf, scale=\pf@mk{scale}]
+  \pf@ifstr{\pf@g}{all}{%
+    \edef\pf@h{\pf@mk{stacked height}}%
+    \pf@mg@panel{a}{0}{\pf@h}{\pf@mk{acceleration title}}{1}%
+    \pf@mg@panel{v}{\fpeval{\pf@h+1.6}}{\pf@h}{\pf@mk{velocity title}}{0}%
+    \pf@mg@panel{x}{\fpeval{2*\pf@h+3.2}}{\pf@h}{\pf@mk{position title}}{0}%
+    \edef\pf@top{\fpeval{3*\pf@h+3.2}}}{%
+    \edef\pf@h{\pf@mk{height}}\edef\pf@top{\pf@h}%
+    \pf@ifstr{\pf@g}{pt}{\pf@mg@panel{x}{0}{\pf@h}{\pf@mk{position title}}{1}}{}%
+    \pf@ifstr{\pf@g}{vt}{\pf@mg@panel{v}{0}{\pf@h}{\pf@mk{velocity title}}{1}}{}%
+    \pf@ifstr{\pf@g}{at}{\pf@mg@panel{a}{0}{\pf@h}{\pf@mk{acceleration title}}{1}}{}}%
+  \pf@ifnolab{\pf@mk{title}}{}{\node[font=\pf@mk{label font}\bfseries, anchor=south] at (\pf@mk{width}/2,\pf@top+0.2) {\pf@axislab{\pf@mk{title}}};}%
+  \end{tikzpicture}\endgroup}

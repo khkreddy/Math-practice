@@ -1,0 +1,479 @@
+{
+  "id": "2026-10-11-p1",
+  "title": "Practice Sheet 1",
+  "subject": "Mathematics",
+  "total_marks": 50,
+  "instructions": [
+    "All questions are compulsory.",
+    "The question paper contains four sections: A, B, C and D.",
+    "Section A consists of 10 MCQ questions of 1 mark each.",
+    "Section B consists of 6 questions of 2 marks each.",
+    "Section C consists of 4 questions of 3 marks each.",
+    "Section D consists of 4 questions of 4 marks each."
+  ],
+  "sections": [
+    {
+      "id": "A",
+      "title": "Section A",
+      "marks_scheme": "10 x 1 = 10",
+      "questions": [
+        {
+          "id": "q1",
+          "qno": 1,
+          "marks": 1,
+          "type": "mcq",
+          "text": "Which of the following is a factor of 44?",
+          "options": [
+            {
+              "id": "a",
+              "text": "5"
+            },
+            {
+              "id": "b",
+              "text": "7"
+            },
+            {
+              "id": "c",
+              "text": "9"
+            },
+            {
+              "id": "d",
+              "text": "11"
+            }
+          ]
+        },
+        {
+          "id": "q2",
+          "qno": 2,
+          "marks": 1,
+          "type": "mcq",
+          "text": "Which fraction is equivalent to $\\frac{3}{5}$?",
+          "options": [
+            {
+              "id": "a",
+              "text": "$\\frac{6}{15}$"
+            },
+            {
+              "id": "b",
+              "text": "$\\frac{9}{15}$"
+            },
+            {
+              "id": "c",
+              "text": "$\\frac{12}{25}$"
+            },
+            {
+              "id": "d",
+              "text": "$\\frac{15}{20}$"
+            }
+          ]
+        },
+        {
+          "id": "q3",
+          "qno": 3,
+          "marks": 1,
+          "type": "mcq",
+          "text": "An angle of $180^\\circ$ is ______ angle.",
+          "options": [
+            {
+              "id": "a",
+              "text": "Reflex"
+            },
+            {
+              "id": "b",
+              "text": "Straight"
+            },
+            {
+              "id": "c",
+              "text": "Right"
+            },
+            {
+              "id": "d",
+              "text": "Obtuse"
+            }
+          ]
+        },
+        {
+          "id": "q4",
+          "qno": 4,
+          "marks": 1,
+          "type": "mcq",
+          "text": "The smallest common multiple of 9 and 6 is ______.",
+          "options": [
+            {
+              "id": "a",
+              "text": "12"
+            },
+            {
+              "id": "b",
+              "text": "18"
+            },
+            {
+              "id": "c",
+              "text": "24"
+            },
+            {
+              "id": "d",
+              "text": "48"
+            }
+          ]
+        },
+        {
+          "id": "q5",
+          "qno": 5,
+          "marks": 1,
+          "type": "mcq",
+          "text": "Which of the following is a prime number?",
+          "options": [
+            {
+              "id": "a",
+              "text": "21"
+            },
+            {
+              "id": "b",
+              "text": "29"
+            },
+            {
+              "id": "c",
+              "text": "35"
+            },
+            {
+              "id": "d",
+              "text": "39"
+            }
+          ]
+        },
+        {
+          "id": "q6",
+          "qno": 6,
+          "marks": 1,
+          "type": "mcq",
+          "text": "The fraction $\\frac{7}{4}$ is a/an ______ fraction.",
+          "options": [
+            {
+              "id": "a",
+              "text": "Proper"
+            },
+            {
+              "id": "b",
+              "text": "Improper"
+            },
+            {
+              "id": "c",
+              "text": "Unit"
+            },
+            {
+              "id": "d",
+              "text": "Mixed"
+            }
+          ]
+        },
+        {
+          "id": "q7",
+          "qno": 7,
+          "marks": 1,
+          "type": "mcq",
+          "text": "A number is divisible by both 2 and 3. Which of the following must also be true?",
+          "options": [
+            {
+              "id": "a",
+              "text": "The number is divisible by 5"
+            },
+            {
+              "id": "b",
+              "text": "The number is divisible by 9"
+            },
+            {
+              "id": "c",
+              "text": "The number is divisible by 6"
+            },
+            {
+              "id": "d",
+              "text": "The number is divisible by 4"
+            }
+          ]
+        },
+        {
+          "id": "q8",
+          "qno": 8,
+          "marks": 1,
+          "type": "mcq",
+          "text": "Which of the following is an example of parallel lines?",
+          "options": [
+            {
+              "id": "a",
+              "text": "Hands of a clock at 3 o'clock"
+            },
+            {
+              "id": "b",
+              "text": "Opposite edges of a book"
+            },
+            {
+              "id": "c",
+              "text": "Letter X"
+            },
+            {
+              "id": "d",
+              "text": "Letter T"
+            }
+          ]
+        },
+        {
+          "id": "q9",
+          "qno": 9,
+          "marks": 1,
+          "type": "mcq",
+          "text": "If CP = Rs. 200 and Profit = Rs. 40, then SP = ?",
+          "options": [
+            {
+              "id": "a",
+              "text": "Rs. 240"
+            },
+            {
+              "id": "b",
+              "text": "Rs. 220"
+            },
+            {
+              "id": "c",
+              "text": "Rs. 160"
+            },
+            {
+              "id": "d",
+              "text": "Rs. 260"
+            }
+          ]
+        },
+        {
+          "id": "q10",
+          "qno": 10,
+          "marks": 1,
+          "type": "mcq",
+          "text": "A straight angle is less than ______ angle.",
+          "options": [
+            {
+              "id": "a",
+              "text": "Right"
+            },
+            {
+              "id": "b",
+              "text": "Acute"
+            },
+            {
+              "id": "c",
+              "text": "Obtuse"
+            },
+            {
+              "id": "d",
+              "text": "Reflex"
+            }
+          ]
+        }
+      ],
+      "instruction": "Choose the correct option in the following."
+    },
+    {
+      "id": "B",
+      "title": "Section B",
+      "marks_scheme": "6 x 2 = 12",
+      "questions": [
+        {
+          "id": "q11",
+          "qno": 11,
+          "marks": 2,
+          "type": "short",
+          "text": "Solve using DMAS: $56 \\div 8 \\times 6 + 3$",
+          "response": "text"
+        },
+        {
+          "id": "q12",
+          "qno": 12,
+          "marks": 2,
+          "type": "multi_part",
+          "text": "Name the following angles according to their measures.",
+          "parts": [
+            {
+              "id": "a",
+              "text": "$45^\\circ$",
+              "response": "short"
+            },
+            {
+              "id": "b",
+              "text": "$125^\\circ$",
+              "response": "short"
+            }
+          ]
+        },
+        {
+          "id": "q13",
+          "qno": 13,
+          "marks": 2,
+          "type": "short",
+          "text": "Find all the factors of 24.",
+          "response": "text"
+        },
+        {
+          "id": "q14",
+          "qno": 14,
+          "marks": 2,
+          "type": "short",
+          "text": "List the first three common multiples of 3 and 6.",
+          "response": "text"
+        },
+        {
+          "id": "q15",
+          "qno": 15,
+          "marks": 2,
+          "type": "short",
+          "text": "Find the largest digit you will replace * with, so that the number 8*639 is divisible by 3.",
+          "response": "text"
+        },
+        {
+          "id": "q16",
+          "qno": 16,
+          "marks": 2,
+          "type": "construction",
+          "text": "Represent $2\\frac{3}{5}$ on a number line.",
+          "response": "photo"
+        }
+      ]
+    },
+    {
+      "id": "C",
+      "title": "Section C",
+      "marks_scheme": "4 x 3 = 12",
+      "questions": [
+        {
+          "id": "q17",
+          "qno": 17,
+          "marks": 3,
+          "type": "word_problem",
+          "text": "Joy bought pens at Rs. 120 a dozen. He sold it for Rs. 15 each. What is his profit or loss?",
+          "response": "text"
+        },
+        {
+          "id": "q18",
+          "qno": 18,
+          "marks": 3,
+          "type": "short",
+          "text": "Arrange the following in ascending and descending order: $\\frac{7}{5}$, $\\frac{13}{12}$, $\\frac{5}{6}$, $\\frac{11}{3}$",
+          "response": "text"
+        },
+        {
+          "id": "q19",
+          "qno": 19,
+          "marks": 3,
+          "type": "short",
+          "text": "Find the HCF of 415 and 385 by long division method.",
+          "response": "text"
+        },
+        {
+          "id": "q20",
+          "qno": 20,
+          "marks": 3,
+          "type": "multi_part",
+          "text": "Draw and label:",
+          "parts": [
+            {
+              "id": "a",
+              "text": "A line segment of 6 cm",
+              "response": "photo"
+            },
+            {
+              "id": "b",
+              "text": "An angle of $75^\\circ$",
+              "response": "photo"
+            },
+            {
+              "id": "c",
+              "text": "An angle of $120^\\circ$",
+              "response": "photo"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "D",
+      "title": "Section D",
+      "marks_scheme": "4 x 4 = 16",
+      "questions": [
+        {
+          "id": "q21",
+          "qno": 21,
+          "marks": 4,
+          "type": "word_problem",
+          "text": "A teacher has 48 red beads and 60 blue beads. She wants to make identical groups using all the beads with the same number of red and blue beads in each group.",
+          "parts": [
+            {
+              "id": "a",
+              "text": "What is the greatest number of identical groups she can make?",
+              "response": "short"
+            },
+            {
+              "id": "b",
+              "text": "How many red and blue beads will each group contain?",
+              "response": "short"
+            },
+            {
+              "id": "c",
+              "text": "Find the total number of beads in each group.",
+              "response": "short"
+            }
+          ]
+        },
+        {
+          "id": "q22",
+          "qno": 22,
+          "marks": 4,
+          "type": "word_problem",
+          "text": "Saumya wants to stitch a dress for girls living in an orphanage. She needs $3\\frac{1}{4}$ m of cloth to stitch a dress. How many dresses can she stitch out of $19\\frac{3}{6}$ m of cloth? Also, find the cloth needed to stitch eight dresses.",
+          "response": "text"
+        },
+        {
+          "id": "q23",
+          "qno": 23,
+          "marks": 4,
+          "type": "word_problem",
+          "text": "A fruit seller bought 132 baskets of apples, each basket containing 145 apples. He sold 3025 apples in the morning and 2145 in the evening. How many apples were left with him?",
+          "response": "text"
+        },
+        {
+          "id": "q24",
+          "qno": 24,
+          "marks": 4,
+          "type": "multi_part",
+          "parts": [
+            {
+              "id": "a",
+              "text": "Draw one net of a cube.",
+              "response": "photo",
+              "marks": 2
+            },
+            {
+              "id": "b",
+              "text": "Answer the questions.",
+              "figure": {
+                "id": "q24",
+                "src": "figures/q24.svg",
+                "alt": "Lines EF and GH are horizontal. Line AB crosses them at O and P. Line CD crosses them at Q and R, with right-angle marks at Q and R."
+              },
+              "parts": [
+                {
+                  "id": "i",
+                  "text": "Name one right angle from the figure.",
+                  "response": "short",
+                  "marks": 1
+                },
+                {
+                  "id": "ii",
+                  "text": "Name one obtuse angle.",
+                  "response": "short",
+                  "marks": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

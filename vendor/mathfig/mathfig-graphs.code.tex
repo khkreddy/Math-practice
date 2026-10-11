@@ -1,0 +1,558 @@
+% Original code written for Hari's teaching use; option set modelled on mathfigures.com (teacher.dev). No site code used.
+%% mathfig-graphs.code.tex -- \mfNumberLine \mfGrid \mfBoxPlot \mfMapping.   Original code (see mathfig.sty).
+\tikzset{
+  mf numbers/.style={font=\sffamily\bfseries\small},
+  mf small numbers/.style={font=\sffamily\bfseries\scriptsize},
+  mf title/.style={font=\sffamily\bfseries},
+  mf axis title/.style={font=\sffamily\bfseries\small},
+  mf grid major/.style={draw=mfink, line width=0.35pt},
+  mf grid minor/.style={draw=mfgrid, line width=0.25pt},
+  mf open dot/.style={fill=white, draw=mfink, line width=1.2pt},
+}
+\pgfkeys{/mf/nl/.cd, from/.initial=-10, to/.initial=10, step/.initial=1, every/.initial=1, length/.initial=12,
+  arrows/.initial=true, graph/.initial=, points/.initial=, sequence/.initial=, terms/.initial=5,
+  sequence label/.initial=auto, color/.initial=mfink, round/.initial=4, fractions/.initial=false, scale/.initial=1}
+\pgfkeys{/mf/grid/.cd, x from/.initial=0, x to/.initial=15, x step/.initial=1, y from/.initial=0, y to/.initial=15, y step/.initial=1,
+  x every/.initial=1, y every/.initial=1, minor/.initial=0, x label/.initial=x, y label/.initial=y,
+  title/.initial=, x title/.initial=, y title/.initial=, arrows/.initial=true, width/.initial=9, height/.initial=9,
+  x pi/.initial=false, y pi/.initial=false, trig/.initial=radians, points/.initial=, samples/.initial=241, scale/.initial=1,
+  numbers/.initial=true}
+\pgfkeys{/mf/box/.cd, data/.initial=, sets/.initial=, from/.initial=, to/.initial=, step/.initial=, every/.initial=1,
+  outliers/.initial=false, whisker ends/.initial=true, title/.initial=, axis title/.initial=, arrows/.initial=true,
+  length/.initial=12, round/.initial=2, scale/.initial=1, box height/.initial=0.8,
+  min label/.initial=none, q1 label/.initial=none, median label/.initial=none, q3 label/.initial=none, max label/.initial=none}
+\pgfkeys{/mf/map/.cd, inputs/.initial=, outputs/.initial=, arrows/.initial=, title/.initial=, input title/.initial=Input,
+  output title/.initial=Output, shape/.initial=oval, gap/.initial=5, row/.initial=0.85, scale/.initial=1}
+\ExplSyntaxOn
+\cs_new:Npn \mf_gk:nn #1#2 { \pgfkeysvalueof{/mf/#1/#2} }
+\tl_new:N \l__mf_kv_tl
+\cs_new_protected:Npn \__mf_kvblank:nF #1#2 { \pgfkeysgetvalue{/mf/#1}\l__mf_kv_tl \tl_if_blank:VF \l__mf_kv_tl {#2} }
+\cs_new:Npn \mf_gbool:nn #1#2 { \str_case:enF {\mf_gk:nn{#1}{#2}} { {true}{1} {1}{1} } {0} }
+%% ---- number formatting
+\tl_new:N \l__mf_fmt_tl
+\tl_new:N \l__mf_fraccs_tl \tl_set:Nn \l__mf_fraccs_tl {\tfrac}
+\cs_new_protected:Npn \__mf_fmt_dec:n #1 % decimal with true minus sign, into \l__mf_fmt_tl
+  {
+    \tl_set:Nx \l__mf_fmt_tl { \fp_eval:n { round(#1, 6) } }
+    \tl_if_head_eq_charcode:VNT \l__mf_fmt_tl - { \tl_set:Nx \l__mf_fmt_tl { \exp_not:N \textminus \tl_tail:V \l__mf_fmt_tl } }
+  }
+\cs_generate_variant:Nn \tl_if_head_eq_charcode:nNT {V}
+%% value #1 as p/q (q <= 24) times the symbol #2 (e.g. \pi or empty), math mode text into \l__mf_fmt_tl
+\cs_new_protected:Npn \__mf_fmt_frac:nn #1#2
+  {
+    \int_zero:N \l__mf_k_int
+    \int_step_inline:nn {24}
+      { \int_compare:nNnT {\l__mf_k_int} = 0
+          { \fp_compare:nNnT { abs((#1)*##1 - round((#1)*##1)) } < {1e-6} { \int_set:Nn \l__mf_k_int {##1} } } }
+    \int_compare:nNnTF {\l__mf_k_int} = 0
+      { \__mf_fmt_dec:n {#1} }
+      {
+        \int_set:Nn \l__mf_i_int { \fp_eval:n { round((#1)*\l__mf_k_int) } }
+        \tl_set:Nx \l__mf_fmt_tl
+          {
+            \int_compare:nNnTF {\l__mf_i_int} = 0 {0}
+              {
+                \int_compare:nNnT {\l__mf_i_int} < 0 { - }
+                \int_compare:nNnTF {\l__mf_k_int} = 1
+                  { \tl_if_blank:nTF {#2} { \int_abs:n{\l__mf_i_int} } { \int_compare:nNnF { \int_abs:n{\l__mf_i_int} } = 1 { \int_abs:n{\l__mf_i_int} } \exp_not:n{#2} } }
+                  { \exp_not:V \l__mf_fraccs_tl { \tl_if_blank:nTF {#2} { \int_abs:n{\l__mf_i_int} } { \int_compare:nNnF { \int_abs:n{\l__mf_i_int} } = 1 { \int_abs:n{\l__mf_i_int} } \exp_not:n{#2} } } { \int_use:N \l__mf_k_int } }
+              }
+          }
+        \tl_set:Nx \l__mf_fmt_tl { \exp_not:N \ensuremath { \exp_not:V \l__mf_fmt_tl } }
+      }
+  }
+%% ---- substitute the variable #2 (a single letter) by (#3) in expression #1 -> \l__mf_expr_tl
+%% implicit multiplication (2x, 3sqrt(2), x(x+1)) is made explicit
+\tl_new:N \l__mf_expr_tl
+\tl_new:N \l__mf_prev_tl
+\bool_new:N \l__mf_inword_bool
+\tl_new:N \l__mf_ss_tl \tl_new:N \l__mf_sw_tl
+\cs_new_protected:Npn \__mf_subst:nnn #1#2#3
+  {
+    \tl_clear:N \l__mf_expr_tl \tl_set:Nn \l__mf_prev_tl {o}
+    \tl_set:Nx \l__mf_ss_tl {#1}
+    \tl_set:Nx \l__mf_ss_tl { \tl_to_str:N \l__mf_ss_tl }
+    \tl_clear:N \l__mf_sw_tl  % current word
+    \str_map_inline:Nn \l__mf_ss_tl
+      {
+        \bool_lazy_or:nnTF { \int_compare_p:nNn {`##1} > {96} && \int_compare_p:nNn {`##1} < {123} }
+                           { \int_compare_p:nNn {`##1} > {64} && \int_compare_p:nNn {`##1} < {91} }
+          { \tl_put_right:Nx \l__mf_sw_tl {##1} }
+          {
+            \__mf_flush_word:nn {#2} {#3}
+            \str_if_eq:nnF {##1} {~}
+              {
+                \str_case:VnT \l__mf_prev_tl
+                  { {)} { \bool_lazy_or:nnT { \str_if_eq_p:nn {##1} {(} } { \int_compare_p:nNn {`##1} > {47} && \int_compare_p:nNn {`##1} < {58} } { \tl_put_right:Nn \l__mf_expr_tl {*} } }
+                    {d} { \str_if_eq:nnT {##1} {(} { \tl_put_right:Nn \l__mf_expr_tl {*} } } }
+                  { }
+                \tl_put_right:Nx \l__mf_expr_tl {##1}
+                \tl_set:Nx \l__mf_prev_tl { \str_case:nnF {##1} { {)}{)} {0}{d}{1}{d}{2}{d}{3}{d}{4}{d}{5}{d}{6}{d}{7}{d}{8}{d}{9}{d}{.}{d} } {o} }
+              }
+          }
+      }
+    \__mf_flush_word:nn {#2} {#3}
+  }
+\cs_new_protected:Npn \__mf_flush_word:nn #1#2
+  {
+    \tl_if_empty:NF \l__mf_sw_tl
+      {
+        \str_case:VnT \l__mf_prev_tl { {d}{} {)}{} } { \tl_put_right:Nn \l__mf_expr_tl {*} }
+        \str_if_eq:VnTF \l__mf_sw_tl {#1}
+          { \tl_put_right:Nn \l__mf_expr_tl { (#2) } \tl_set:Nn \l__mf_prev_tl {)} }
+          { \tl_put_right:NV \l__mf_expr_tl \l__mf_sw_tl \tl_set:Nn \l__mf_prev_tl {f} }
+        \tl_clear:N \l__mf_sw_tl
+      }
+  }
+\cs_generate_variant:Nn \str_case:nnT {Vn}
+\cs_generate_variant:Nn \str_if_eq:nnTF {Vn}
+\cs_generate_variant:Nn \str_if_eq_p:nn {Vn}
+\cs_generate_variant:Nn \tl_if_in:nnT {nV}
+%% ============================================================ \mfNumberLine
+%%   graph  = intervals separated by ';', e.g. (-inf,-1); [3,inf)   (round bracket = open dot)
+%%   points = name=value, ...  (value may be a fraction such as 3/4)      sequence = expression in n, terms = how many (n = 1..terms)
+\cs_new:Npn \__mf_nlx:n #1 { \fp_eval:n { round( ((#1) - (\__mf_v:n{nla}))/((\__mf_v:n{nlb})-(\__mf_v:n{nla})) * \mf_gk:nn{nl}{length}, 4) } }
+\NewDocumentCommand \mfNumberLine { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/nl}{#1}
+    \tl_set:Nn \l__mf_fraccs_tl {\dfrac}
+    \__mf_set:nn {nla} { \mf_gk:nn{nl}{from} } \__mf_set:nn {nlb} { \mf_gk:nn{nl}{to} } \__mf_set:nn {nls} { \mf_gk:nn{nl}{step} }
+    \int_set:Nn \l__mf_n_int { \fp_eval:n { round((\__mf_v:n{nlb}-\__mf_v:n{nla})/\__mf_v:n{nls}) } }
+    \tl_set:Nx \l__mf_L_tl { \mf_gk:nn{nl}{length} }
+    \begin{tikzpicture}[mf, line~width=1.6pt, scale=\mf_gk:nn{nl}{scale}]
+      \use:e { \exp_not:N \draw [ \int_compare:nNnT {\mf_gbool:nn{nl}{arrows}} = 1 {mf~arrows} ] (-0.55,0) -- (\fp_eval:n{\l__mf_L_tl+0.55},0); }
+      \int_step_inline:nnn {0} {\l__mf_n_int}
+        {
+          \tl_set:Nx \l_tmpa_tl { \__mf_nlx:n { \__mf_v:n{nla} + ##1*\__mf_v:n{nls} } }
+          \draw[line~width=1.2pt] (\l_tmpa_tl, 0.16) -- (\l_tmpa_tl,-0.16);
+          \bool_lazy_and:nnT { \int_compare_p:nNn {\mf_gk:nn{nl}{every}} > 0 } { \int_compare_p:nNn { \int_mod:nn {##1} {\mf_gk:nn{nl}{every}} } = 0 }
+            {
+              \int_compare:nNnTF {\mf_gbool:nn{nl}{fractions}} = 1
+                { \__mf_fmt_frac:nn { \__mf_v:n{nla} + ##1*\__mf_v:n{nls} } {} }
+                { \__mf_fmt_dec:n { \__mf_v:n{nla} + ##1*\__mf_v:n{nls} } }
+              \node[mf~numbers, anchor=north] at (\l_tmpa_tl,-0.22) {\l__mf_fmt_tl};
+            }
+        }
+      % intervals
+      \__mf_kvblank:nF {nl/graph}
+        {
+          \seq_set_split:Nne \l__mf_tmp_seq {;} { \mf_gk:nn{nl}{graph} }
+          \seq_map_inline:Nn \l__mf_tmp_seq { \tl_if_blank:nF {##1} { \__mf_interval:n {##1} } }
+        }
+      % points
+      \clist_map_inline:en { \mf_gk:nn{nl}{points} } { \__mf_nl_point:w ##1 = = \q_stop }
+      % sequence
+      \__mf_kvblank:nF {nl/sequence}
+        {
+          \int_step_inline:nn { \mf_gk:nn{nl}{terms} }
+            {
+              \__mf_subst:nnn { \mf_gk:nn{nl}{sequence} } {n} {##1}
+              \tl_set:Nx \l_tmpa_tl { \fp_eval:n { round(\l__mf_expr_tl, 8) } }
+              \fp_compare:nNnT { (\l_tmpa_tl - \__mf_v:n{nla})*(\l_tmpa_tl - \__mf_v:n{nlb}) } < {1e-9}
+                {
+                  \fill (\__mf_nlx:n{\l_tmpa_tl},0) circle[radius=4.2pt];
+                  \fp_compare:nNnT { abs((\l_tmpa_tl-\__mf_v:n{nla})/\__mf_v:n{nls} - round((\l_tmpa_tl-\__mf_v:n{nla})/\__mf_v:n{nls})) } > {1e-6}
+                    {
+                      \str_case:enF { \mf_gk:nn{nl}{sequence~label} }
+                        { {none}{ \tl_clear:N \l__mf_fmt_tl } {auto}{ \__mf_fmt_frac:nn {\l_tmpa_tl} {} } }
+                        { \tl_set:Nx \l__mf_fmt_tl { \exp_not:N \def \exp_not:N \mfn {##1} \exp_not:N \mflab { \mf_gk:nn{nl}{sequence~label} } } }
+                      \node[mf~numbers, anchor=south] at (\__mf_nlx:n{\l_tmpa_tl},0.2) {\l__mf_fmt_tl};
+                    }
+                }
+            }
+        }
+    \end{tikzpicture}
+    \group_end:
+  }
+\tl_new:N \l__mf_L_tl
+\cs_generate_variant:Nn \seq_set_split:Nnn {Nne}
+\cs_new_protected:Npn \__mf_nl_point:w #1 = #2 = #3 \q_stop
+  {
+    \tl_if_blank:nF {#2}
+      {
+        \tl_set:Nx \l_tmpa_tl { \__mf_nlx:n {#2} }
+        \fill (\l_tmpa_tl,0) circle[radius=4.2pt];
+        \tl_if_blank:nF {#1} { \node[anchor=south, font=\large\bfseries] at (\l_tmpa_tl,0.2) {\mflab{\boldsymbol{#1}}}; }
+      }
+  }
+\cs_new_protected:Npn \__mf_interval:n #1
+  {
+    \tl_set:Nx \l_tmpa_tl { \tl_trim_spaces:n {#1} }
+    \tl_set:Nx \l__mf_lb_tl { \tl_head:V \l_tmpa_tl }
+    \tl_set:Nx \l__mf_rb_tl { \tl_item:Nn \l_tmpa_tl {-1} }
+    \tl_set:Nx \l_tmpb_tl { \tl_range:Nnn \l_tmpa_tl {2} {-2} }
+    \exp_after:wN \__mf_interval_aux:w \l_tmpb_tl \q_stop
+  }
+\tl_new:N \l__mf_lb_tl \tl_new:N \l__mf_rb_tl \tl_new:N \l__mf_arr_tl
+\cs_generate_variant:Nn \tl_head:n {V}
+\cs_new_protected:Npn \__mf_interval_aux:w #1 , #2 \q_stop
+  {
+    \tl_set:Nx \l__mf_ia_tl { \tl_trim_spaces:n {#1} } \tl_set:Nx \l__mf_ib_tl { \tl_trim_spaces:n {#2} }
+    \tl_clear:N \l__mf_arr_tl
+    \str_if_in:NnTF \l__mf_ia_tl {inf} { \tl_set:Nn \l__mf_xa_tl {-0.62} \tl_put_right:Nn \l__mf_arr_tl {,~{Triangle[length=9pt,width=11pt]}-} }
+      { \tl_set:Nx \l__mf_xa_tl { \__mf_nlx:n {\l__mf_ia_tl} } }
+    \str_if_in:NnTF \l__mf_ib_tl {inf} { \tl_set:Nx \l__mf_xb_tl { \fp_eval:n{\l__mf_L_tl+0.62} } \tl_put_right:Nn \l__mf_arr_tl {,~-{Triangle[length=9pt,width=11pt]}} }
+      { \tl_set:Nx \l__mf_xb_tl { \__mf_nlx:n {\l__mf_ib_tl} } }
+    \use:e { \exp_not:N \draw[line~width=3.4pt, line~cap=butt, color=\mf_gk:nn{nl}{color} \exp_not:V \l__mf_arr_tl ] (\l__mf_xa_tl,0) -- (\l__mf_xb_tl,0); }
+    \str_if_in:NnF \l__mf_ia_tl {inf} { \__mf_nl_end:Vn \l__mf_xa_tl { \str_if_eq:VnTF \l__mf_lb_tl {[} {1} {0} } }
+    \str_if_in:NnF \l__mf_ib_tl {inf} { \__mf_nl_end:Vn \l__mf_xb_tl { \str_if_eq:VnTF \l__mf_rb_tl {]} {1} {0} } }
+  }
+\tl_new:N \l__mf_ia_tl \tl_new:N \l__mf_ib_tl \tl_new:N \l__mf_xa_tl \tl_new:N \l__mf_xb_tl
+\cs_new_protected:Npn \__mf_nl_end:nn #1#2
+  { \int_compare:nNnTF {#2} = 1 { \fill (#1,0) circle[radius=4.2pt]; } { \filldraw[mf~open~dot] (#1,0) circle[radius=3.6pt]; } }
+\cs_generate_variant:Nn \__mf_nl_end:nn {Vn}
+%% ============================================================ \mfGrid  (coordinate grid)
+\seq_new:N \l__mf_plots_seq
+\pgfkeys{/mf/grid/.cd,
+  plot/.code={\seq_put_right:Nn \l__mf_plots_seq {#1}},
+  plots/.code={\seq_put_right:Nn \l__mf_plots_seq {#1}}}
+\cs_new:Npn \__mf_gx:n #1 { \fp_eval:n { round( ((#1) - (\__mf_v:n{xa}))/(\__mf_v:n{xs}) * \__mf_v:n{cell}, 4) } }
+\cs_new:Npn \__mf_gy:n #1 { \fp_eval:n { round( ((#1) - (\__mf_v:n{ya}))/(\__mf_v:n{ys}) * \__mf_v:n{cell}, 4) } }
+\NewDocumentCommand \mfGrid { O{} }
+  {
+    \group_begin:
+    \seq_clear:N \l__mf_plots_seq
+    \pgfqkeys{/mf/grid}{#1}
+    \clist_map_inline:nn {xa/x~from, xb/x~to, xs/x~step, ya/y~from, yb/y~to, ys/y~step}
+      { \__mf_grid_val:w ##1 \q_stop }
+    \int_set:Nn \l__mf_i_int { \fp_eval:n { round((\__mf_v:n{xb}-\__mf_v:n{xa})/\__mf_v:n{xs}) } }
+    \int_set:Nn \l__mf_j_int { \fp_eval:n { round((\__mf_v:n{yb}-\__mf_v:n{ya})/\__mf_v:n{ys}) } }
+    \__mf_set:nn {cell} { min( \mf_gk:nn{grid}{width}/\l__mf_i_int, \mf_gk:nn{grid}{height}/\l__mf_j_int ) }
+    \__mf_set:nn {W} { \l__mf_i_int*\__mf_v:n{cell} } \__mf_set:nn {H} { \l__mf_j_int*\__mf_v:n{cell} }
+    % axes positions
+    \__mf_set:nn {ax} { \fp_compare:nTF { \__mf_v:n{xa} <= 0 <= \__mf_v:n{xb} } { \__mf_gx:n{0} } {0} }
+    \__mf_set:nn {ay} { \fp_compare:nTF { \__mf_v:n{ya} <= 0 <= \__mf_v:n{yb} } { \__mf_gy:n{0} } {0} }
+    \__mf_set:nn {axv} { \fp_compare:nTF { \__mf_v:n{xa} <= 0 <= \__mf_v:n{xb} } {0} { \__mf_v:n{xa} } }
+    \__mf_set:nn {ayv} { \fp_compare:nTF { \__mf_v:n{ya} <= 0 <= \__mf_v:n{yb} } {0} { \__mf_v:n{ya} } }
+    \begin{tikzpicture}[mf, scale=\mf_gk:nn{grid}{scale}]
+      % minor and major grid lines
+      \int_compare:nNnT { \mf_gk:nn{grid}{minor} } > 1
+        {
+          \int_step_inline:nn { \l__mf_i_int * \mf_gk:nn{grid}{minor} }
+            { \draw[mf~grid~minor] (\fp_eval:n{round(##1*\__mf_v:n{cell}/\mf_gk:nn{grid}{minor},4)},0) -- ++(0,\__mf_v:n{H}); }
+          \int_step_inline:nn { \l__mf_j_int * \mf_gk:nn{grid}{minor} }
+            { \draw[mf~grid~minor] (0,\fp_eval:n{round(##1*\__mf_v:n{cell}/\mf_gk:nn{grid}{minor},4)}) -- ++(\__mf_v:n{W},0); }
+        }
+      \int_step_inline:nnn {0} {\l__mf_i_int} { \draw[mf~grid~major] (\fp_eval:n{round(##1*\__mf_v:n{cell},4)},0) -- ++(0,\__mf_v:n{H}); }
+      \int_step_inline:nnn {0} {\l__mf_j_int} { \draw[mf~grid~major] (0,\fp_eval:n{round(##1*\__mf_v:n{cell},4)}) -- ++(\__mf_v:n{W},0); }
+      % axes
+      \tl_set:Nx \l_tmpa_tl { \int_compare:nNnT {\mf_gbool:nn{grid}{arrows}} = 1 {mf~arrows,} }
+      \use:e { \exp_not:N \draw[\l_tmpa_tl line~width=1.3pt] (-0.4,\__mf_v:n{ay}) -- (\fp_eval:n{\__mf_v:n{W}+0.4},\__mf_v:n{ay}); }
+      \use:e { \exp_not:N \draw[\l_tmpa_tl line~width=1.3pt] (\__mf_v:n{ax},-0.4) -- (\__mf_v:n{ax},\fp_eval:n{\__mf_v:n{H}+0.4}); }
+      \__mf_kvblank:nF {grid/x~label}
+        { \node[anchor=west, font=\itshape\small] at (\fp_eval:n{\__mf_v:n{W}+0.42},\__mf_v:n{ay}) {\mf_gk:nn{grid}{x~label}}; }
+      \__mf_kvblank:nF {grid/y~label}
+        { \node[anchor=south, font=\itshape\small] at (\__mf_v:n{ax},\fp_eval:n{\__mf_v:n{H}+0.42}) {\mf_gk:nn{grid}{y~label}}; }
+      % numbers
+      \int_compare:nNnT { \mf_gbool:nn{grid}{numbers} } = 1
+        {
+          \bool_lazy_and:nnT { \int_compare_p:nNn {\mf_gk:nn{grid}{x~every}} > 0 } { \c_true_bool }
+            {
+              \int_step_inline:nnn {0} {\l__mf_i_int}
+                {
+                  \__mf_set:nn {v} { \__mf_v:n{xa} + ##1*\__mf_v:n{xs} }
+                  \bool_lazy_and:nnT { \int_compare_p:nNn { \int_mod:nn {##1} {\mf_gk:nn{grid}{x~every}} } = 0 }
+                                     { ! \fp_compare_p:nNn { abs(\__mf_v:n{v}-\__mf_v:n{axv}) } < {1e-9} || \fp_compare_p:nNn {\__mf_v:n{axv}} = {\__mf_v:n{xa}} }
+                    {
+                      \int_compare:nNnTF {\mf_gbool:nn{grid}{x~pi}} = 1 { \__mf_fmt_frac:nn {\__mf_v:n{v}/pi} {\pi} } { \__mf_fmt_dec:n {\__mf_v:n{v}} }
+                      \node[mf~small~numbers, anchor=north, fill=white, inner~sep=1pt] at (\fp_eval:n{round(##1*\__mf_v:n{cell},4)},\fp_eval:n{\__mf_v:n{ay}-0.12}) {\l__mf_fmt_tl};
+                    }
+                }
+            }
+          \int_compare:nNnT {\mf_gk:nn{grid}{y~every}} > 0
+            {
+              \int_step_inline:nnn {0} {\l__mf_j_int}
+                {
+                  \__mf_set:nn {v} { \__mf_v:n{ya} + ##1*\__mf_v:n{ys} }
+                  \bool_lazy_and:nnT { \int_compare_p:nNn { \int_mod:nn {##1} {\mf_gk:nn{grid}{y~every}} } = 0 }
+                                     { ! \fp_compare_p:nNn { abs(\__mf_v:n{v}-\__mf_v:n{ayv}) } < {1e-9} }
+                    {
+                      \int_compare:nNnTF {\mf_gbool:nn{grid}{y~pi}} = 1 { \__mf_fmt_frac:nn {\__mf_v:n{v}/pi} {\pi} } { \__mf_fmt_dec:n {\__mf_v:n{v}} }
+                      \node[mf~small~numbers, anchor=east, fill=white, inner~sep=1pt] at (\fp_eval:n{\__mf_v:n{ax}-0.12},\fp_eval:n{round(##1*\__mf_v:n{cell},4)}) {\l__mf_fmt_tl};
+                    }
+                }
+            }
+        }
+      % titles
+      \__mf_kvblank:nF {grid/title}
+        { \node[mf~title, anchor=south] at (\fp_eval:n{\__mf_v:n{W}/2},\fp_eval:n{\__mf_v:n{H}+0.75}) {\mftxtlab{\mf_gk:nn{grid}{title}}}; }
+      \__mf_kvblank:nF {grid/x~title}
+        { \node[mf~axis~title, anchor=north] at (\fp_eval:n{\__mf_v:n{W}/2},-0.75) {\mftxtlab{\mf_gk:nn{grid}{x~title}}}; }
+      \__mf_kvblank:nF {grid/y~title}
+        { \node[mf~axis~title, anchor=south, rotate=90] at (-0.9,\fp_eval:n{\__mf_v:n{H}/2}) {\mftxtlab{\mf_gk:nn{grid}{y~title}}}; }
+      % graphs of functions:  plot = {[colour] expression in x}
+      \seq_map_inline:Nn \l__mf_plots_seq { \__mf_plot:n {##1} }
+      % points  name/x/y
+      \clist_map_inline:en { \mf_gk:nn{grid}{points} } { \__mf_grid_point:w ##1 / / / \q_stop }
+    \end{tikzpicture}
+    \group_end:
+  }
+\cs_new_protected:Npn \__mf_grid_val:w #1/#2 \q_stop
+  {
+    \__mf_subst:nnn { \pgfkeysvalueof{/mf/grid/#2} } {@} {0}
+    \__mf_set:nn {#1} { \l__mf_expr_tl }
+  }
+\cs_new_protected:Npn \__mf_grid_point:w #1 / #2 / #3 / #4 \q_stop
+  {
+    \tl_if_blank:nF {#3}
+      {
+        \__mf_subst:nnn {#2} {@} {0} \tl_set:Nx \l_tmpa_tl { \__mf_gx:n {\l__mf_expr_tl} }
+        \__mf_subst:nnn {#3} {@} {0} \tl_set:Nx \l_tmpb_tl { \__mf_gy:n {\l__mf_expr_tl} }
+        \fill (\l_tmpa_tl,\l_tmpb_tl) circle[radius=2.6pt];
+        \tl_if_blank:nF {#1} { \node[anchor=south~west, inner~sep=1.5pt, font=\small\bfseries] at (\l_tmpa_tl,\l_tmpb_tl) {\mflab{#1}}; }
+      }
+  }
+\tl_new:N \l__mf_plotcol_tl
+\tl_new:N \l__mf_run_tl
+\bool_new:N \l__mf_in_bool
+\cs_new_protected:Npn \__mf_plot:n #1
+  {
+    \peek_meaning:NTF [ { \__mf_plot_opt:w } { \__mf_plot_opt:w [mfink] } #1 \q_stop
+  }
+\cs_new_protected:Npn \__mf_plot_opt:w [#1] #2 \q_stop
+  {
+    \tl_set:Nn \l__mf_plotcol_tl {#1}
+    \str_if_eq:eeTF { \mf_gk:nn{grid}{trig} } {degrees}
+      { \tl_set:Nn \l_tmpa_tl {#2} \clist_map_inline:nn {sin,cos,tan} { \tl_replace_all:Nnn \l_tmpa_tl {##1(} {##1d(} } }
+      { \tl_set:Nn \l_tmpa_tl {#2} }
+    % strip a leading "y="
+    \tl_set:Nx \l_tmpa_tl { \tl_to_str:N \l_tmpa_tl }
+    \tl_if_in:NnT \l_tmpa_tl {=} { \exp_after:wN \__mf_after_eq:w \l_tmpa_tl \q_stop }
+    \tl_set_eq:NN \l__mf_fexpr_tl \l_tmpa_tl
+    \int_set:Nn \l__mf_k_int { \mf_gk:nn{grid}{samples} }
+    \tl_clear:N \l__mf_run_tl \bool_set_false:N \l__mf_in_bool
+    \__mf_set:nn {lo} { min(\__mf_v:n{ya},\__mf_v:n{yb}) } \__mf_set:nn {hi} { max(\__mf_v:n{ya},\__mf_v:n{yb}) }
+    \int_step_inline:nnn {0} { \l__mf_k_int - 1 }
+      {
+        \__mf_set:nn {px} { \__mf_v:n{xa} + (\__mf_v:n{xb}-\__mf_v:n{xa})*##1/(\l__mf_k_int-1) }
+        \__mf_subst:Vnx \l__mf_fexpr_tl {x} { \__mf_v:n{px} }
+        \__mf_set:nn {py} { \l__mf_expr_tl }
+        \fp_compare:nTF { \__mf_v:n{lo} - 1e-9 <= \__mf_v:n{py} <= \__mf_v:n{hi} + 1e-9 }
+          {
+            \bool_if:NF \l__mf_in_bool
+              { % entering: add the crossing point
+                \int_compare:nNnT {##1} > 0
+                  { \__mf_set:nn {bd} { \__mf_v:n{opy} > \__mf_v:n{hi} ? \__mf_v:n{hi} : \__mf_v:n{lo} }
+                    \__mf_set:nn {cx} { \__mf_v:n{opx} + (\__mf_v:n{px}-\__mf_v:n{opx})*(\__mf_v:n{bd}-\__mf_v:n{opy})/(\__mf_v:n{py}-\__mf_v:n{opy}) }
+                    \tl_put_right:Nx \l__mf_run_tl { (\__mf_gx:n{\__mf_v:n{cx}},\__mf_gy:n{\__mf_v:n{bd}}) -- } }
+                \bool_set_true:N \l__mf_in_bool
+              }
+            \tl_put_right:Nx \l__mf_run_tl { (\__mf_gx:n{\__mf_v:n{px}},\__mf_gy:n{\__mf_v:n{py}}) -- }
+          }
+          {
+            \bool_if:NT \l__mf_in_bool
+              {
+                \fp_compare:nT { \__mf_v:n{py} == \__mf_v:n{py} }
+                  { \__mf_set:nn {bd} { \__mf_v:n{py} > \__mf_v:n{hi} ? \__mf_v:n{hi} : \__mf_v:n{lo} }
+                    \__mf_set:nn {cx} { \__mf_v:n{opx} + (\__mf_v:n{px}-\__mf_v:n{opx})*(\__mf_v:n{bd}-\__mf_v:n{opy})/(\__mf_v:n{py}-\__mf_v:n{opy}) }
+                    \tl_put_right:Nx \l__mf_run_tl { (\__mf_gx:n{\__mf_v:n{cx}},\__mf_gy:n{\__mf_v:n{bd}}) -- } }
+                \__mf_plot_run:
+                \bool_set_false:N \l__mf_in_bool
+              }
+          }
+        \tl_set:cx { l__mf_opx_tl } { \__mf_v:n{px} } \tl_set:cx { l__mf_opy_tl } { \__mf_v:n{py} }
+      }
+    \bool_if:NT \l__mf_in_bool { \__mf_plot_run: }
+  }
+\tl_new:N \l__mf_fexpr_tl
+\cs_new_protected:Npn \__mf_after_eq:w #1 = #2 \q_stop { \tl_set:Nn \l_tmpa_tl {#2} }
+\cs_generate_variant:Nn \__mf_subst:nnn {Vnx}
+\cs_new_protected:Npn \__mf_plot_run:
+  {
+    \tl_put_right:Nn \l__mf_run_tl { \q_stop }
+    \tl_replace_once:Nnn \l__mf_run_tl { -- \q_stop } { }
+    \tl_if_in:NnT \l__mf_run_tl {--}
+      { \use:e { \exp_not:N \draw[line~width=1.4pt, color=\l__mf_plotcol_tl, {Triangle[length=7pt,width=6pt]}-{Triangle[length=7pt,width=6pt]}] \exp_not:V \l__mf_run_tl ; } }
+    \tl_clear:N \l__mf_run_tl
+  }
+%% ============================================================ \mfBoxPlot
+\seq_new:N \l__mf_vals_seq
+\seq_new:N \l__mf_sets_seq
+\cs_new:Npn \__mf_item:n #1 { \seq_item:Nn \l__mf_vals_seq {#1} }
+\cs_new_protected:Npn \__mf_median:nn #1#2 % indices (1-based, inclusive) into the sorted values -> fp expr
+  {
+    \int_set:Nn \l__mf_k_int { (#2) - (#1) + 1 }
+    \int_if_odd:nTF {\l__mf_k_int}
+      { \tl_set:Nx \l__mf_med_tl { \__mf_item:n { (#1) + (\l__mf_k_int-1)/2 } } }
+      { \tl_set:Nx \l__mf_med_tl { \fp_eval:n { ( \__mf_item:n { (#1) + \l__mf_k_int/2 - 1 } + \__mf_item:n { (#1) + \l__mf_k_int/2 } )/2 } } }
+  }
+\tl_new:N \l__mf_med_tl
+%% five-number summary of a clist of numbers -> b<i>min, b<i>q1, ... ; outliers in b<i>out (clist)
+\cs_new_protected:Npn \__mf_summary:nn #1#2
+  {
+    \seq_set_from_clist:Nn \l__mf_vals_seq {#2}
+    \seq_set_map_e:NNn \l__mf_vals_seq \l__mf_vals_seq { \fp_eval:n { \tl_trim_spaces:n {##1} } }
+    \seq_sort:Nn \l__mf_vals_seq { \fp_compare:nNnTF {##1} > {##2} { \sort_return_swapped: } { \sort_return_same: } }
+    \int_set:Nn \l__mf_n_int { \seq_count:N \l__mf_vals_seq }
+    \int_compare:nNnTF {\l__mf_n_int} = 5
+      {
+        \__mf_settx:nn {b#1min} { \__mf_item:n{1} } \__mf_settx:nn {b#1q1} { \__mf_item:n{2} } \__mf_settx:nn {b#1med} { \__mf_item:n{3} }
+        \__mf_settx:nn {b#1q3} { \__mf_item:n{4} } \__mf_settx:nn {b#1max} { \__mf_item:n{5} }
+        \__mf_settx:nn {b#1lo} { \__mf_item:n{1} } \__mf_settx:nn {b#1hi} { \__mf_item:n{5} } \__mf_settx:nn {b#1out} {}
+      }
+      {
+        \__mf_median:nn {1} {\l__mf_n_int} \__mf_settx:nn {b#1med} {\l__mf_med_tl}
+        \__mf_median:nn {1} { \int_div_truncate:nn {\l__mf_n_int} {2} } \__mf_settx:nn {b#1q1} {\l__mf_med_tl}
+        \__mf_median:nn { \l__mf_n_int - \int_div_truncate:nn {\l__mf_n_int} {2} + 1 } {\l__mf_n_int} \__mf_settx:nn {b#1q3} {\l__mf_med_tl}
+        \__mf_settx:nn {b#1min} { \__mf_item:n{1} } \__mf_settx:nn {b#1max} { \__mf_item:n{-1} }
+        \__mf_settx:nn {b#1lo} { \__mf_item:n{1} } \__mf_settx:nn {b#1hi} { \__mf_item:n{-1} } \__mf_settx:nn {b#1out} {}
+        \int_compare:nNnT { \mf_gbool:nn{box}{outliers} } = 1
+          {
+            \__mf_set:nn {f0} { \__mf_v:n{b#1q1} - 1.5*(\__mf_v:n{b#1q3}-\__mf_v:n{b#1q1}) }
+            \__mf_set:nn {f1} { \__mf_v:n{b#1q3} + 1.5*(\__mf_v:n{b#1q3}-\__mf_v:n{b#1q1}) }
+            \__mf_settx:nn {b#1lo} {1e9} \__mf_settx:nn {b#1hi} {-1e9}
+            \seq_map_inline:Nn \l__mf_vals_seq
+              {
+                \fp_compare:nTF { \__mf_v:n{f0} <= ##1 <= \__mf_v:n{f1} }
+                  { \__mf_set:nn {b#1lo} { min(\__mf_v:n{b#1lo}, ##1) } \__mf_set:nn {b#1hi} { max(\__mf_v:n{b#1hi}, ##1) } }
+                  { \__mf_settx:nn {b#1out} { \__mf_v:n{b#1out} ##1, } }
+              }
+          }
+      }
+  }
+\cs_new:Npn \__mf_bx:n #1 { \fp_eval:n { round( ((#1) - (\__mf_v:n{ba}))/((\__mf_v:n{bb})-(\__mf_v:n{ba})) * \mf_gk:nn{box}{length}, 4) } }
+\NewDocumentCommand \mfBoxPlot { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/box}{#1}
+    \int_set:Nn \l_mf_round_int { \mf_gk:nn{box}{round} }
+    % data sets: "name = values | name = values"  or data = values
+    \seq_clear:N \l__mf_sets_seq
+    \tl_if_blank:eTF { \mf_gk:nn{box}{sets} }
+      { \__mf_kvblank:nF {box/data} { \seq_put_right:Nx \l__mf_sets_seq { = \mf_gk:nn{box}{data} } } }
+      { \seq_set_split:Nne \l__mf_sets_seq {|} { \mf_gk:nn{box}{sets} } }
+    \int_set:Nn \l__mf_j_int { \seq_count:N \l__mf_sets_seq }
+    \__mf_set:nn {gmin} {1e9} \__mf_set:nn {gmax} {-1e9}
+    \int_step_inline:nn {\l__mf_j_int}
+      {
+        \tl_set:Nx \l_tmpa_tl { \seq_item:Nn \l__mf_sets_seq {##1} }
+        \tl_if_in:NnF \l_tmpa_tl {=} { \tl_put_left:Nn \l_tmpa_tl {=} }
+        \use:e { \exp_not:N \__mf_box_set:nw {##1} \exp_not:V \l_tmpa_tl \exp_not:N \q_stop }
+        \__mf_set:nn {gmin} { min(\__mf_v:n{gmin}, \__mf_v:n{b##1min}) } \__mf_set:nn {gmax} { max(\__mf_v:n{gmax}, \__mf_v:n{b##1max}) }
+      }
+    \int_compare:nNnT {\l__mf_j_int} = 0 { \__mf_set:nn {gmin} {0} \__mf_set:nn {gmax} {10} }
+    % axis: given or fitted with a 1-2-5 step
+    \tl_if_blank:eTF { \mf_gk:nn{box}{step} }
+      {
+        \__mf_set:nn {R} { max(\__mf_v:n{gmax}-\__mf_v:n{gmin}, 1e-6) }
+        \__mf_set:nn {p} { 10^(floor(ln(\__mf_v:n{R}/10)/ln(10))) }
+        \__mf_set:nn {bs} { \__mf_v:n{R}/\__mf_v:n{p} <= 10 ? \__mf_v:n{p} : (\__mf_v:n{R}/\__mf_v:n{p} <= 20 ? 2*\__mf_v:n{p} : (\__mf_v:n{R}/\__mf_v:n{p} <= 50 ? 5*\__mf_v:n{p} : 10*\__mf_v:n{p})) }
+      }
+      { \__mf_set:nn {bs} { \mf_gk:nn{box}{step} } }
+    \__mf_set:nn {ba} { \tl_if_blank:eTF { \mf_gk:nn{box}{from} } { floor(\__mf_v:n{gmin}/\__mf_v:n{bs})*\__mf_v:n{bs} } { \mf_gk:nn{box}{from} } }
+    \__mf_set:nn {bb} { \tl_if_blank:eTF { \mf_gk:nn{box}{to} } { ceil(\__mf_v:n{gmax}/\__mf_v:n{bs})*\__mf_v:n{bs} } { \mf_gk:nn{box}{to} } }
+    \fp_compare:nNnT { \__mf_v:n{bb} } = { \__mf_v:n{ba} } { \__mf_set:nn {bb} { \__mf_v:n{ba}+\__mf_v:n{bs} } }
+    \int_set:Nn \l__mf_n_int { \fp_eval:n { round((\__mf_v:n{bb}-\__mf_v:n{ba})/\__mf_v:n{bs}) } }
+    \tl_set:Nx \l__mf_L_tl { \mf_gk:nn{box}{length} }
+    \begin{tikzpicture}[mf, line~width=1.3pt, scale=\mf_gk:nn{box}{scale}]
+      \use:e { \exp_not:N \draw [line~width=1.2pt, \int_compare:nNnT {\mf_gbool:nn{box}{arrows}} = 1 {mf~arrows} ] (-0.45,0) -- (\fp_eval:n{\l__mf_L_tl+0.45},0); }
+      \int_step_inline:nnn {0} {\l__mf_n_int}
+        {
+          \tl_set:Nx \l_tmpa_tl { \__mf_bx:n { \__mf_v:n{ba} + ##1*\__mf_v:n{bs} } }
+          \draw[line~width=0.9pt] (\l_tmpa_tl, 0.12) -- (\l_tmpa_tl,-0.12);
+          \bool_lazy_and:nnT { \int_compare_p:nNn {\mf_gk:nn{box}{every}} > 0 } { \int_compare_p:nNn { \int_mod:nn {##1} {\mf_gk:nn{box}{every}} } = 0 }
+            { \__mf_fmt_dec:n { \__mf_v:n{ba} + ##1*\__mf_v:n{bs} }
+              \node[mf~numbers, font=\sffamily\bfseries\footnotesize, anchor=north] at (\l_tmpa_tl,-0.18) {\l__mf_fmt_tl}; }
+        }
+      \__mf_kvblank:nF {box/axis~title}
+        { \node[mf~axis~title, anchor=north, font=\sffamily\bfseries\small] at (\fp_eval:n{\l__mf_L_tl/2},-0.6) {\mftxtlab{\mf_gk:nn{box}{axis~title}}}; }
+      \tl_set:Nx \l__mf_bh_tl { \mf_gk:nn{box}{box~height} }
+      \int_step_inline:nn {\l__mf_j_int}
+        {
+          \tl_set:Nx \l__mf_by_tl { \fp_eval:n { 0.75 + \l__mf_bh_tl/2 + (\l__mf_j_int - ##1)*(\l__mf_bh_tl+0.45) } }
+          \tl_set:Nx \l_tmpa_tl { \fp_eval:n{\l__mf_by_tl-\l__mf_bh_tl/2} } \tl_set:Nx \l_tmpb_tl { \fp_eval:n{\l__mf_by_tl+\l__mf_bh_tl/2} }
+          \draw (\__mf_bx:n{\__mf_v:n{b##1q1}},\l_tmpa_tl) rectangle (\__mf_bx:n{\__mf_v:n{b##1q3}},\l_tmpb_tl);
+          \draw (\__mf_bx:n{\__mf_v:n{b##1med}},\l_tmpa_tl) -- (\__mf_bx:n{\__mf_v:n{b##1med}},\l_tmpb_tl);
+          \draw (\__mf_bx:n{\__mf_v:n{b##1lo}},\l__mf_by_tl) -- (\__mf_bx:n{\__mf_v:n{b##1q1}},\l__mf_by_tl);
+          \draw (\__mf_bx:n{\__mf_v:n{b##1q3}},\l__mf_by_tl) -- (\__mf_bx:n{\__mf_v:n{b##1hi}},\l__mf_by_tl);
+          \int_compare:nNnT { \mf_gbool:nn{box}{whisker~ends} } = 1
+            {
+              \draw (\__mf_bx:n{\__mf_v:n{b##1lo}},\fp_eval:n{\l__mf_by_tl-\l__mf_bh_tl/4}) -- ++(0,\fp_eval:n{\l__mf_bh_tl/2});
+              \draw (\__mf_bx:n{\__mf_v:n{b##1hi}},\fp_eval:n{\l__mf_by_tl-\l__mf_bh_tl/4}) -- ++(0,\fp_eval:n{\l__mf_bh_tl/2});
+            }
+          \clist_map_inline:en { \__mf_v:n{b##1out} } { \fill (\__mf_bx:n{####1},\l__mf_by_tl) circle[radius=1.8pt]; }
+          \tl_if_blank:eF { \__mf_v:n{bname##1} }
+            { \node[anchor=east, font=\sffamily\bfseries\footnotesize] at (-0.35,\l__mf_by_tl) {\__mf_v:n{bname##1}}; }
+          % labels of the five numbers
+          \clist_map_inline:nn { min/lo, q1/q1, median/med, q3/q3, max/hi } { \__mf_box_label:nw {##1} ####1 \q_stop }
+        }
+      \__mf_kvblank:nF {box/title}
+        { \node[mf~title, anchor=south, font=\sffamily\bfseries] at (\fp_eval:n{\l__mf_L_tl/2},\fp_eval:n{0.75+\l__mf_j_int*(\l__mf_bh_tl+0.45)+0.1}) {\mftxtlab{\mf_gk:nn{box}{title}}}; }
+    \end{tikzpicture}
+    \group_end:
+  }
+\tl_new:N \l__mf_by_tl \tl_new:N \l__mf_bh_tl
+\cs_new_protected:Npn \__mf_box_set:nw #1 #2 = #3 \q_stop
+  { \__mf_settx:nn {bname#1} { \tl_trim_spaces:n {#2} } \__mf_summary:nn {#1} {#3} }
+\cs_new_protected:Npn \__mf_box_label:nw #1 #2/#3 \q_stop
+  {
+    \mf_resolve:eee { \mf_gk:nn{box}{#2~label} } {1} { \mf_num:n { \__mf_v:n{b#1#3} } }
+    \tl_if_blank:VF \l_mf_lab_tl
+      { \use:e { \exp_not:N \node[anchor=south, font=\exp_not:N\small, inner~sep=1pt] at (\__mf_bx:n{\__mf_v:n{b#1#3}}, \fp_eval:n{\l__mf_by_tl+\l__mf_bh_tl/2+0.04})
+          { \exp_not:N \mflab { \exp_not:V \l_mf_lab_tl } }; } }
+  }
+%% ============================================================ \mfMapping
+\seq_new:N \l__mf_in_seq \seq_new:N \l__mf_out_seq
+\NewDocumentCommand \mfMapping { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/map}{#1}
+    \seq_set_from_clist:Ne \l__mf_in_seq { \mf_gk:nn{map}{inputs} }
+    \seq_set_from_clist:Ne \l__mf_out_seq { \mf_gk:nn{map}{outputs} }
+    \int_set:Nn \l__mf_n_int { \int_max:nn { 2 } { \int_max:nn { \seq_count:N \l__mf_in_seq } { \seq_count:N \l__mf_out_seq } } }
+    \tl_set:Nx \l__mf_row_tl { \mf_gk:nn{map}{row} }
+    \tl_set:Nx \l__mf_gap_tl { \mf_gk:nn{map}{gap} }
+    \__mf_set:nn {hh} { (\l__mf_n_int-1)*\l__mf_row_tl/2 + 0.75 }  % half height of the ovals
+    \begin{tikzpicture}[mf, line~width=1pt, scale=\mf_gk:nn{map}{scale}]
+      \str_case:en { \mf_gk:nn{map}{shape} }
+        {
+          {oval} { \draw (0,0) ellipse[x~radius=0.95, y~radius=\__mf_v:n{hh}]; \draw (\l__mf_gap_tl,0) ellipse[x~radius=0.95, y~radius=\__mf_v:n{hh}]; }
+          {box}  { \draw[rounded~corners=4pt] (-1.05,-\__mf_v:n{hh}) rectangle (1.05,\__mf_v:n{hh});
+                   \draw[rounded~corners=4pt] (\fp_eval:n{\l__mf_gap_tl-1.05},-\__mf_v:n{hh}) rectangle (\fp_eval:n{\l__mf_gap_tl+1.05},\__mf_v:n{hh}); }
+        }
+      \__mf_map_col:Nnn \l__mf_in_seq {0} {in}
+      \__mf_map_col:Nnn \l__mf_out_seq {\l__mf_gap_tl} {out}
+      \tl_set:Nx \l_tmpa_tl { \fp_eval:n { \__mf_v:n{hh}+0.25 } }
+      \__mf_kvblank:nF {map/input~title} { \node[mf~title, anchor=south] at (0,\l_tmpa_tl) {\mftxtlab{\mf_gk:nn{map}{input~title}}}; }
+      \__mf_kvblank:nF {map/output~title} { \node[mf~title, anchor=south] at (\l__mf_gap_tl,\l_tmpa_tl) {\mftxtlab{\mf_gk:nn{map}{output~title}}}; }
+      \__mf_kvblank:nF {map/title}
+        { \node[mf~title, anchor=south, font=\sffamily\bfseries\large] at (\fp_eval:n{\l__mf_gap_tl/2},\fp_eval:n{\l_tmpa_tl+0.75}) {\mftxtlab{\mf_gk:nn{map}{title}}}; }
+      % arrows  input/output, ...  (matched by text)
+      \clist_map_inline:en { \mf_gk:nn{map}{arrows} } { \__mf_map_arrow:w ##1 / / \q_stop }
+    \end{tikzpicture}
+    \group_end:
+  }
+\tl_new:N \l__mf_row_tl \tl_new:N \l__mf_gap_tl
+\cs_new_protected:Npn \__mf_map_col:Nnn #1#2#3
+  {
+    \int_zero:N \l__mf_i_int
+    \__mf_set:nn {top} { (\seq_count:N #1 - 1)*\l__mf_row_tl/2 }
+    \seq_map_inline:Nn #1
+      {
+        \int_incr:N \l__mf_i_int
+        \node[font=\large, inner~sep=2pt] (mf#3\int_use:N\l__mf_i_int) at (#2, \fp_eval:n{round(\__mf_v:n{top} - (\l__mf_i_int-1)*\l__mf_row_tl,4)}) {\__mf_map_text:n {##1}};
+      }
+  }
+\cs_new_protected:Npn \__mf_map_text:n #1 { \tl_if_head_is_N_type:nTF {#1} { \__mf_map_text_aux:n {#1} } { #1 } }
+\cs_new_protected:Npn \__mf_map_text_aux:n #1
+  { \regex_match:nnTF { \A\-?[0-9.]+\Z } {#1} { $#1$ } { #1 } }
+\cs_new_protected:Npn \__mf_map_find:Nnn #1#2#3 % seq, text, out-int
+  {
+    \int_zero:N #3 \int_zero:N \l__mf_k_int
+    \seq_map_inline:Nn #1 { \int_incr:N \l__mf_k_int \tl_if_eq:nnT { ##1 } {#2} { \int_compare:nNnT {#3} = 0 { \int_set_eq:NN #3 \l__mf_k_int } } }
+  }
+\int_new:N \l__mf_a_int \int_new:N \l__mf_b_int
+\cs_new_protected:Npn \__mf_map_arrow:w #1 / #2 / #3 \q_stop
+  {
+    \tl_if_blank:nF {#2}
+      {
+        \tl_set:Nx \l_tmpa_tl { \tl_trim_spaces:n {#1} } \tl_set:Nx \l_tmpb_tl { \tl_trim_spaces:n {#2} }
+        \__mf_map_find:NVN \l__mf_in_seq \l_tmpa_tl \l__mf_a_int
+        \__mf_map_find:NVN \l__mf_out_seq \l_tmpb_tl \l__mf_b_int
+        \bool_lazy_and:nnT { \int_compare_p:nNn {\l__mf_a_int} > 0 } { \int_compare_p:nNn {\l__mf_b_int} > 0 }
+          { \draw[mf~arrow, line~width=1pt, shorten~>=2pt, shorten~<=2pt] (mfin\int_use:N\l__mf_a_int.east) -- (mfout\int_use:N\l__mf_b_int.west); }
+      }
+  }
+\cs_new_protected:Npn \__mf_map_find:NVN #1#2#3 { \exp_args:NNo \__mf_map_find:Nnn #1 {#2} #3 }
+\ExplSyntaxOff

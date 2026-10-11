@@ -1,0 +1,527 @@
+% Original code written for Hari's teaching use; option set modelled on mathfigures.com (teacher.dev). No site code used.
+%% mathfig-solids.code.tex -- \mfPrism \mfPyramid (polyhedra with automatic hidden edges)
+%% and \mfCylinder \mfCone \mfSphere (round solids).   Original code (see mathfig.sty).
+%%
+%% 3-D convention: x to the right, y up, z away from the viewer.  Oblique (cabinet) projection
+%%   X = s (x + k z cos(alpha)),  Y = s (y + k z sin(alpha)),   k = depth scale, alpha = 40 (depth right) / 140 (left).
+%% A face is visible when its outward normal n satisfies n . (-k cos a, -k sin a, 1) < 0; an edge is
+%% drawn solid when one of its faces is visible, otherwise dashed (or omitted with hidden=false).
+\pgfkeys{/mf/solid/.cd,
+  base/.initial=rectangle, n/.initial=6, length/.initial=, width/.initial=, height/.initial=, slant/.initial=,
+  tri base/.initial=6, tri height/.initial=8, hyp/.initial=, side/.initial=, apothem/.initial=,
+  radius/.initial=, lean/.initial=, oblique/.initial=false, sits/.initial=side,
+  shape/.initial=whole, bowl/.initial=false, diameter/.initial=false,
+  hidden/.initial=true, show height/.initial=true, right angle squares/.initial=true, unit/.initial=cm, round/.initial=1,
+  names/.initial=false, depth/.initial=right, depth scale/.initial=0.5, depth angle/.initial=40,
+  fig width/.initial=7, fig height/.initial=6, scale/.initial=1,
+  length label/.initial=auto, width label/.initial=auto, height label/.initial=auto, slant label/.initial=auto,
+  tri base label/.initial=auto, tri height label/.initial=auto, hyp label/.initial=auto, side label/.initial=auto,
+  apothem label/.initial=auto, radius label/.initial=auto, lean label/.initial=auto, center dot/.initial=true}
+\ExplSyntaxOn
+\cs_new:Npn \mf_sk:n #1 { \pgfkeysvalueof{/mf/solid/#1} }
+\cs_new:Npn \mf_sbool:n #1 { \str_case:enF {\mf_sk:n{#1}} { {true}{1} {1}{1} } {0} }
+\cs_new:Npn \mf_sgiven:n #1 { \tl_if_blank:eTF {\mf_sk:n{#1}} {0} {1} }
+\cs_new:Npn \mf_sval:nn #1#2 { \tl_if_blank:eTF {\mf_sk:n{#1}} {#2} {\mf_sk:n{#1}} }
+%% label text for a measure: key #1, value #2 (fp expr), given flag #3  -> \l_mf_lab_tl
+\cs_new_protected:Npn \__mf_slab:nnn #1#2#3
+  { \mf_resolve:eee { \mf_sk:n{#1~label} } {#3} { \exp_not:N \mf_measure:nn { \fp_eval:n{#2} } { \mf_sk:n{unit} } } }
+%% ---- 3-D points
+\cs_new_protected:Npn \__mf_P:nnnn #1#2#3#4 { \__mf_set:nn {#1x} {#2} \__mf_set:nn {#1y} {#3} \__mf_set:nn {#1z} {#4} }
+\cs_new:Npn \__mf_X:n #1 { \__mf_r:n { \__mf_v:n{sc}*((\__mf_v:n{#1x})+\__mf_v:n{kc}*(\__mf_v:n{#1z})) } }
+\cs_new:Npn \__mf_Y:n #1 { \__mf_r:n { \__mf_v:n{sc}*((\__mf_v:n{#1y})+\__mf_v:n{ks}*(\__mf_v:n{#1z})) } }
+\cs_new_protected:Npn \__mf_proj_setup:
+  {
+    \__mf_set:nn {kc} { \mf_sk:n{depth~scale}*cosd( \str_if_eq:eeTF{\mf_sk:n{depth}}{left}{180-\mf_sk:n{depth~angle}}{\mf_sk:n{depth~angle}} ) }
+    \__mf_set:nn {ks} { \mf_sk:n{depth~scale}*sind(\mf_sk:n{depth~angle}) }
+    \__mf_set:nn {sc} {1}
+  }
+%% fit: scale so that the projected vertices v1..vN fit fig width x fig height
+\cs_new_protected:Npn \__mf_sfit:n #1
+  {
+    \__mf_set:nn {sc} {1}
+    \__mf_set:nn {x0} {1e6} \__mf_set:nn {x1} {-1e6} \__mf_set:nn {y0} {1e6} \__mf_set:nn {y1} {-1e6}
+    \int_step_inline:nn {#1}
+      {
+        \__mf_set:nn {x0} { min(\__mf_v:n{x0}, \__mf_X:n{v##1}) } \__mf_set:nn {x1} { max(\__mf_v:n{x1}, \__mf_X:n{v##1}) }
+        \__mf_set:nn {y0} { min(\__mf_v:n{y0}, \__mf_Y:n{v##1}) } \__mf_set:nn {y1} { max(\__mf_v:n{y1}, \__mf_Y:n{v##1}) }
+      }
+    \__mf_set:nn {sc} { min( \mf_sk:n{fig~width}/max(\__mf_v:n{x1}-\__mf_v:n{x0},1e-3), \mf_sk:n{fig~height}/max(\__mf_v:n{y1}-\__mf_v:n{y0},1e-3) ) }
+    \__mf_set:nn {cx} { \__mf_v:n{sc}*(\__mf_v:n{x0}+\__mf_v:n{x1})/2 } \__mf_set:nn {cy} { \__mf_v:n{sc}*(\__mf_v:n{y0}+\__mf_v:n{y1})/2 }
+    % 3-d centroid of the vertices (for outward normals)
+    \__mf_set:nn {gx} {0} \__mf_set:nn {gy} {0} \__mf_set:nn {gz} {0}
+    \int_step_inline:nn {#1}
+      { \__mf_set:nn {gx} { \__mf_v:n{gx}+\__mf_v:n{v##1x}/#1 } \__mf_set:nn {gy} { \__mf_v:n{gy}+\__mf_v:n{v##1y}/#1 } \__mf_set:nn {gz} { \__mf_v:n{gz}+\__mf_v:n{v##1z}/#1 } }
+  }
+%% ---- drawing helpers (points by name)
+\cs_new_protected:Npn \__mf_segt:nnn #1#2#3
+  { \use:e { \exp_not:N \mf@seg {\__mf_X:n{#1}} {\__mf_Y:n{#1}} {\__mf_X:n{#2}} {\__mf_Y:n{#2}} {#3} } }
+\cs_new_protected:Npn \__mf_dott:n #1 { \use:e { \exp_not:N \mf@dot {\__mf_X:n{#1}} {\__mf_Y:n{#1}} {} } }
+%% label of edge #1-#2 outside the figure (away from the projected centre); #3 text
+\cs_new_protected:Npn \__mf_elab:nnn #1#2#3
+  {
+    \tl_if_blank:nF {#3}
+      {
+        \__mf_set:nn {mx} { (\__mf_X:n{#1}+\__mf_X:n{#2})/2 } \__mf_set:nn {my} { (\__mf_Y:n{#1}+\__mf_Y:n{#2})/2 }
+        \__mf_set:nn {dx} { \__mf_X:n{#2}-\__mf_X:n{#1} } \__mf_set:nn {dy} { \__mf_Y:n{#2}-\__mf_Y:n{#1} }
+        \__mf_set:nn {dl} { max(sqrt((\__mf_v:n{dx})^2+(\__mf_v:n{dy})^2),1e-6) }
+        \__mf_set:nn {nx} { -\__mf_v:n{dy}/\__mf_v:n{dl} } \__mf_set:nn {ny} { \__mf_v:n{dx}/\__mf_v:n{dl} }
+        \fp_compare:nNnT { (\__mf_v:n{mx}-\__mf_v:n{cx})*\__mf_v:n{nx} + (\__mf_v:n{my}-\__mf_v:n{cy})*\__mf_v:n{ny} } < {0}
+          { \__mf_set:nn {nx} {-\__mf_v:n{nx}} \__mf_set:nn {ny} {-\__mf_v:n{ny}} }
+        \use:e { \exp_not:N \mf@nodeA {\__mf_r:n{\__mf_v:n{mx}+0.06*\__mf_v:n{nx}}} {\__mf_r:n{\__mf_v:n{my}+0.06*\__mf_v:n{ny}}}
+          { \exp_not:N \mflab {\exp_not:n{#3}} } { \__mf_r:n{atand(-\__mf_v:n{ny},-\__mf_v:n{nx})} } {} }
+      }
+  }
+%% label of an inner segment #1-#2, beside it on the side of direction #4 (deg); #3 text
+\cs_new_protected:Npn \__mf_ilab:nnnn #1#2#3#4
+  {
+    \tl_if_blank:nF {#3}
+      { \use:e { \exp_not:N \mf@nodeA {\__mf_r:n{(\__mf_X:n{#1}+\__mf_X:n{#2})/2+0.06*cosd(#4)}} {\__mf_r:n{(\__mf_Y:n{#1}+\__mf_Y:n{#2})/2+0.06*sind(#4)}}
+          { \exp_not:N \mflab {\exp_not:n{#3}} } { \__mf_r:n{#4+180} } {mf~halo} } }
+  }
+%% right-angle mark at point #1 with 3-d directions #2 and #3 (each "dx,dy,dz", need not be unit)
+\cs_new_protected:Npn \__mf_sqt:nnn #1#2#3
+  {
+    \int_compare:nNnT { \mf_sbool:n{right~angle~squares} } = 1
+      {
+        \use:e { \exp_not:N \__mf_sqt_aux:nw {a} #2 \exp_not:N \q_stop \exp_not:N \__mf_sqt_aux:nw {b} #3 \exp_not:N \q_stop }
+        \__mf_set:nn {qs} { 0.22/\__mf_v:n{sc} }
+        \__mf_P:nnnn {qa} { \__mf_v:n{#1x}+\__mf_v:n{qs}*\__mf_v:n{qax} } { \__mf_v:n{#1y}+\__mf_v:n{qs}*\__mf_v:n{qay} } { \__mf_v:n{#1z}+\__mf_v:n{qs}*\__mf_v:n{qaz} }
+        \__mf_P:nnnn {qb} { \__mf_v:n{#1x}+\__mf_v:n{qs}*\__mf_v:n{qbx} } { \__mf_v:n{#1y}+\__mf_v:n{qs}*\__mf_v:n{qby} } { \__mf_v:n{#1z}+\__mf_v:n{qs}*\__mf_v:n{qbz} }
+        \__mf_P:nnnn {qc} { \__mf_v:n{qax}+\__mf_v:n{qbx}-\__mf_v:n{#1x} } { \__mf_v:n{qay}+\__mf_v:n{qby}-\__mf_v:n{#1y} } { \__mf_v:n{qaz}+\__mf_v:n{qbz}-\__mf_v:n{#1z} }
+        \use:e { \exp_not:N \mf@path {mf~thin} { (\__mf_X:n{qa},\__mf_Y:n{qa}) -- (\__mf_X:n{qc},\__mf_Y:n{qc}) -- (\__mf_X:n{qb},\__mf_Y:n{qb}) } }
+      }
+  }
+\cs_new_protected:Npn \__mf_sqt_aux:nw #1 #2,#3,#4 \q_stop
+  {
+    \__mf_set:nn {ql} { max(sqrt((#2)^2+(#3)^2+(#4)^2),1e-9) }
+    \__mf_set:nn {q#1x} { (#2)/\__mf_v:n{ql} } \__mf_set:nn {q#1y} { (#3)/\__mf_v:n{ql} } \__mf_set:nn {q#1z} { (#4)/\__mf_v:n{ql} }
+  }
+%% ---- polyhedron: vertices v1..vN, faces f1..fF (clists of vertex numbers)
+\int_new:N \l__mf_nv_int  \int_new:N \l__mf_nf_int
+\prop_new:N \l__mf_edges_prop
+\seq_new:N \l__mf_face_seq
+\cs_new_protected:Npn \__mf_face:n #1 { \int_incr:N \l__mf_nf_int \tl_set:cn { l__mf_f \int_use:N \l__mf_nf_int _tl } {#1} }
+\cs_new_protected:Npn \__mf_polyhedron:
+  {
+    \prop_clear:N \l__mf_edges_prop
+    \int_step_inline:nn {\l__mf_nf_int}
+      {
+        \seq_set_from_clist:Nv \l__mf_face_seq { l__mf_f ##1 _tl }
+        \int_set:Nn \l__mf_k_int { \seq_count:N \l__mf_face_seq }
+        \__mf_set:nn {nx} {0} \__mf_set:nn {ny} {0} \__mf_set:nn {nz} {0}
+        \__mf_set:nn {fx} {0} \__mf_set:nn {fy} {0} \__mf_set:nn {fz} {0}
+        \int_step_inline:nn {\l__mf_k_int}
+          {
+            \tl_set:Nx \l_tmpa_tl { v \seq_item:Nn \l__mf_face_seq {####1} }
+            \tl_set:Nx \l_tmpb_tl { v \seq_item:Nn \l__mf_face_seq { \int_mod:nn {####1} {\l__mf_k_int} + 1 } }
+            \__mf_set:nn {nx} { \__mf_v:n{nx} + (\__mf_v:n{\l_tmpa_tl y}-\__mf_v:n{\l_tmpb_tl y})*(\__mf_v:n{\l_tmpa_tl z}+\__mf_v:n{\l_tmpb_tl z}) }
+            \__mf_set:nn {ny} { \__mf_v:n{ny} + (\__mf_v:n{\l_tmpa_tl z}-\__mf_v:n{\l_tmpb_tl z})*(\__mf_v:n{\l_tmpa_tl x}+\__mf_v:n{\l_tmpb_tl x}) }
+            \__mf_set:nn {nz} { \__mf_v:n{nz} + (\__mf_v:n{\l_tmpa_tl x}-\__mf_v:n{\l_tmpb_tl x})*(\__mf_v:n{\l_tmpa_tl y}+\__mf_v:n{\l_tmpb_tl y}) }
+            \__mf_set:nn {fx} { \__mf_v:n{fx} + \__mf_v:n{\l_tmpa_tl x}/\l__mf_k_int }
+            \__mf_set:nn {fy} { \__mf_v:n{fy} + \__mf_v:n{\l_tmpa_tl y}/\l__mf_k_int }
+            \__mf_set:nn {fz} { \__mf_v:n{fz} + \__mf_v:n{\l_tmpa_tl z}/\l__mf_k_int }
+          }
+        \__mf_set:nn {og} { \__mf_v:n{nx}*(\__mf_v:n{fx}-\__mf_v:n{gx}) + \__mf_v:n{ny}*(\__mf_v:n{fy}-\__mf_v:n{gy}) + \__mf_v:n{nz}*(\__mf_v:n{fz}-\__mf_v:n{gz}) }
+        \__mf_set:nn {vd} { (\__mf_v:n{og} < 0 ? -1 : 1) * ( -\__mf_v:n{kc}*\__mf_v:n{nx} - \__mf_v:n{ks}*\__mf_v:n{ny} + \__mf_v:n{nz} ) }
+        \tl_set:Nx \l__mf_fv_tl { \fp_compare:nNnTF { \__mf_v:n{vd} } < { -1e-6 } {1} {0} }
+        \tl_set:cx { l__mf_fvis##1_tl } { \l__mf_fv_tl }
+        \int_step_inline:nn {\l__mf_k_int}
+          {
+            \int_set:Nn \l__mf_i_int { \seq_item:Nn \l__mf_face_seq {####1} }
+            \int_set:Nn \l__mf_j_int { \seq_item:Nn \l__mf_face_seq { \int_mod:nn {####1} {\l__mf_k_int} + 1 } }
+            \tl_set:Nx \l_tmpa_tl { \int_min:nn {\l__mf_i_int} {\l__mf_j_int} - \int_max:nn {\l__mf_i_int} {\l__mf_j_int} }
+            \prop_get:NVNTF \l__mf_edges_prop \l_tmpa_tl \l_tmpb_tl
+              { \prop_put:NVx \l__mf_edges_prop \l_tmpa_tl { \int_max:nn {\l_tmpb_tl} {\l__mf_fv_tl} } }
+              { \prop_put:NVx \l__mf_edges_prop \l_tmpa_tl { \l__mf_fv_tl } }
+          }
+      }
+    % hidden first, then visible
+    \int_compare:nNnT { \mf_sbool:n{hidden} } = 1
+      { \prop_map_inline:Nn \l__mf_edges_prop { \int_compare:nNnT {##2} = 0 { \__mf_edge:w ##1 \q_stop {mf~hidden} } } }
+    \prop_map_inline:Nn \l__mf_edges_prop { \int_compare:nNnT {##2} = 1 { \__mf_edge:w ##1 \q_stop {mf} } }
+  }
+\tl_new:N \l__mf_fv_tl
+\cs_generate_variant:Nn \seq_set_from_clist:Nn {Nv}
+\cs_generate_variant:Nn \prop_get:NnNTF {NV}
+\cs_generate_variant:Nn \prop_put:Nnn {NVx}
+\cs_new_protected:Npn \__mf_edge:w #1-#2 \q_stop #3 { \__mf_segt:nnn {v#1} {v#2} {#3} }
+\cs_new:Npn \__mf_fvis:n #1 { \tl_use:c { l__mf_fvis#1_tl } }
+%% vertex names A, B, C, ... outside the figure
+\cs_new_protected:Npn \__mf_vnames:n #1
+  {
+    \int_compare:nNnT { \mf_sbool:n{names} } = 1
+      {
+        \int_step_inline:nn {#1}
+          {
+            \__mf_set:nn {ax} { \__mf_X:n{v##1}-\__mf_v:n{cx} } \__mf_set:nn {ay} { \__mf_Y:n{v##1}-\__mf_v:n{cy} }
+            \use:e { \exp_not:N \mf@nodeA {\__mf_X:n{v##1}} {\__mf_Y:n{v##1}} { \exp_not:N \mflab {\int_to_Alph:n{##1}} }
+              { \__mf_r:n{atand(-\__mf_v:n{ay},-\__mf_v:n{ax})} } {inner~sep=2pt} }
+          }
+      }
+  }
+\cs_new_protected:Npn \__mf_solid_begin: { \begin{tikzpicture}[mf, scale=\mf_sk:n{scale}, every~node/.append~style={font=\mf_font:}] }
+\cs_new_protected:Npn \__mf_solid_end: { \end{tikzpicture} }
+\cs_new:Npn \__mf_depthleft: { \str_if_eq:eeTF {\mf_sk:n{depth}} {left} {1} {0} }
+%% =============================================================== \mfPrism
+\NewDocumentCommand \mfPrism { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/solid}{#1}
+    \int_set:Nn \l_mf_round_int { \mf_sk:n{round} }
+    \__mf_proj_setup:
+    \__mf_set:nn {H} { \mf_sval:nn{height}{ \str_case:enF{\mf_sk:n{base}} { {rectangle}{4} {regular}{10} } {12} } }
+    \__mf_set:nn {lean} { \int_compare:nNnTF {\mf_sbool:n{oblique}} = 1 { \mf_sval:nn{lean}{0.4*\__mf_v:n{H}} } {0} }
+    \int_zero:N \l__mf_nf_int
+    \str_case:enF { \mf_sk:n{base} }
+      {
+        {rectangle}
+          {
+            \__mf_set:nn {L} { \mf_sval:nn{length}{5} } \__mf_set:nn {W} { \mf_sval:nn{width}{3} }
+            \int_set:Nn \l__mf_nv_int {8}
+            \__mf_P:nnnn {v1} {0} {0} {0}  \__mf_P:nnnn {v2} {\__mf_v:n{L}} {0} {0}
+            \__mf_P:nnnn {v3} {\__mf_v:n{L}} {0} {\__mf_v:n{W}}  \__mf_P:nnnn {v4} {0} {0} {\__mf_v:n{W}}
+            \int_step_inline:nn {4} { \__mf_P:nnnn {v\int_eval:n{##1+4}} {\__mf_v:n{v##1x}+\__mf_v:n{lean}} {\__mf_v:n{H}} {\__mf_v:n{v##1z}} }
+            \__mf_face:n {1,2,3,4} \__mf_face:n {5,6,7,8} \__mf_face:n {1,2,6,5} \__mf_face:n {2,3,7,6} \__mf_face:n {3,4,8,7} \__mf_face:n {4,1,5,8}
+            \__mf_sfit:n {8}
+            \__mf_solid_begin: \__mf_polyhedron:
+            \__mf_slab:nnn {length} {\__mf_v:n{L}} {1} \__mf_elab:nno {v1} {v2} \l_mf_lab_tl
+            \__mf_slab:nnn {width} {\__mf_v:n{W}} {1}
+            \int_compare:nNnTF {\__mf_depthleft:} = 1 { \__mf_elab:nno {v1} {v4} \l_mf_lab_tl } { \__mf_elab:nno {v2} {v3} \l_mf_lab_tl }
+            \__mf_slab:nnn {height} {\__mf_v:n{H}} {1}
+            \int_compare:nNnTF {\__mf_depthleft:} = 1 { \__mf_elab:nno {v2} {v6} \l_mf_lab_tl } { \__mf_elab:nno {v1} {v5} \l_mf_lab_tl }
+          }
+        {regular}
+          {
+            \int_set:Nn \l__mf_n_int { \mf_sk:n{n} }
+            \__mf_set:nn {S} { \tl_if_blank:eTF {\mf_sk:n{side}} { \tl_if_blank:eTF {\mf_sk:n{apothem}} {4} { 2*(\mf_sk:n{apothem})*tand(180/\l__mf_n_int) } } {\mf_sk:n{side}} }
+            \__mf_set:nn {R} { \__mf_v:n{S}/(2*sind(180/\l__mf_n_int)) } \__mf_set:nn {ap} { \__mf_v:n{R}*cosd(180/\l__mf_n_int) }
+            \__mf_regular_base:n {\__mf_v:n{lean}}
+            \int_set:Nn \l__mf_nv_int { 2*\l__mf_n_int }
+            \__mf_sfit:n { \l__mf_nv_int }
+            \__mf_solid_begin: \__mf_polyhedron:
+            \__mf_slab:nnn {side} {\__mf_v:n{S}} {1} \__mf_elab:nno {v1} {v2} \l_mf_lab_tl
+            \__mf_slab:nnn {height} {\__mf_v:n{H}} {1} \__mf_elab:nno {v1} {v\int_eval:n{\l__mf_n_int+1}} \l_mf_lab_tl
+            % apothem on the top face
+            \__mf_slab:nnn {apothem} {\__mf_v:n{ap}} {\mf_sgiven:n{apothem}}
+            \tl_if_blank:VF \l_mf_lab_tl
+              {
+                \__mf_P:nnnn {c} {\__mf_v:n{lean}} {\__mf_v:n{H}} {0}  \__mf_P:nnnn {m} {\__mf_v:n{lean}} {\__mf_v:n{H}} {-\__mf_v:n{ap}}
+                \__mf_segt:nnn {c} {m} {mf~thin} \__mf_dott:n {c} \__mf_sqt:nnn {m} {0,0,1} {1,0,0}
+                \__mf_ilab:nnVn {c} {m} \l_mf_lab_tl {160}
+              }
+          }
+      }
+      { % triangular base: right | isosceles
+        \__mf_set:nn {b} { \mf_sval:nn{tri~base}{6} } \__mf_set:nn {t} { \mf_sval:nn{tri~height}{8} }
+        \__mf_set:nn {u3} { \str_if_eq:eeTF {\mf_sk:n{base}} {right} {0} {\__mf_v:n{b}/2} }
+        \int_set:Nn \l__mf_nv_int {6}
+        \str_if_eq:eeTF { \mf_sk:n{sits} } {base}
+          { % standing on the triangle: triangle in the ground plane
+            \__mf_P:nnnn {v1} {0} {0} {0} \__mf_P:nnnn {v2} {\__mf_v:n{b}} {0} {0} \__mf_P:nnnn {v3} {\__mf_v:n{u3}} {0} {\__mf_v:n{t}}
+            \int_step_inline:nn {3} { \__mf_P:nnnn {v\int_eval:n{##1+3}} {\__mf_v:n{v##1x}+\__mf_v:n{lean}} {\__mf_v:n{H}} {\__mf_v:n{v##1z}} }
+          }
+          { % lying on its side: triangle faces the viewer, prism goes back
+            \__mf_P:nnnn {v1} {0} {0} {0} \__mf_P:nnnn {v2} {\__mf_v:n{b}} {0} {0} \__mf_P:nnnn {v3} {\__mf_v:n{u3}} {\__mf_v:n{t}} {0}
+            \int_step_inline:nn {3} { \__mf_P:nnnn {v\int_eval:n{##1+3}} {\__mf_v:n{v##1x}+\__mf_v:n{lean}} {\__mf_v:n{v##1y}} {\__mf_v:n{H}} }
+          }
+        \__mf_face:n {1,2,3} \__mf_face:n {4,5,6} \__mf_face:n {1,2,5,4} \__mf_face:n {2,3,6,5} \__mf_face:n {3,1,4,6}
+        \__mf_sfit:n {6}
+        \__mf_solid_begin: \__mf_polyhedron:
+        \__mf_slab:nnn {tri~base} {\__mf_v:n{b}} {1} \__mf_elab:nno {v1} {v2} \l_mf_lab_tl
+        \__mf_slab:nnn {tri~height} {\__mf_v:n{t}} {1}
+        \str_if_eq:eeTF {\mf_sk:n{base}} {right}
+          {
+            \tl_set_eq:NN \l_tmpa_tl \l_mf_lab_tl
+            \__mf_elab:nno {v1} {v3} \l_tmpa_tl
+            \str_if_eq:eeTF { \mf_sk:n{sits} } {base} { \__mf_sqt:nnn {v1} {1,0,0} {0,0,1} } { \__mf_sqt:nnn {v1} {1,0,0} {0,1,0} }
+          }
+          {
+            \tl_set_eq:NN \l_tmpa_tl \l_mf_lab_tl
+            \__mf_P:nnnn {m} {\__mf_v:n{b}/2} {0} {0}
+            \__mf_segt:nnn {v3} {m} {mf~dashed}
+            \__mf_ilab:nnVn {v3} {m} \l_tmpa_tl {180}
+            \str_if_eq:eeTF { \mf_sk:n{sits} } {base} { \__mf_sqt:nnn {m} {1,0,0} {0,0,1} } { \__mf_sqt:nnn {m} {1,0,0} {0,1,0} }
+          }
+        \__mf_slab:nnn {hyp} { sqrt((\__mf_v:n{b}-\__mf_v:n{u3})^2+(\__mf_v:n{t})^2) } {\mf_sgiven:n{hyp}}
+        \__mf_elab:nno {v2} {v3} \l_mf_lab_tl
+        \__mf_slab:nnn {height} {\__mf_v:n{H}} {1}
+        \str_if_eq:eeTF { \mf_sk:n{sits} } {base} { \__mf_elab:nno {v2} {v5} \l_mf_lab_tl }
+          { \int_compare:nNnTF {\__mf_depthleft:} = 1 { \__mf_elab:nno {v1} {v4} \l_mf_lab_tl } { \__mf_elab:nno {v2} {v5} \l_mf_lab_tl } }
+      }
+    \__mf_vnames:n { \l__mf_nv_int }
+    \__mf_solid_end:
+    \group_end:
+  }
+\cs_new_protected:Npn \__mf_elab:nnN #1#2#3 { \exp_args:Nnno \__mf_elab:nnn {#1} {#2} {#3} }
+\cs_new_protected:Npn \__mf_elab:nno #1#2#3 { \exp_args:Nnno \__mf_elab:nnn {#1} {#2} {#3} }
+\cs_generate_variant:Nn \__mf_ilab:nnnn {nnV}
+\cs_generate_variant:Nn \tl_if_blank:nF {V}
+%% regular n-gon base in the ground plane, centred at the origin, front side v1-v2 parallel to x;
+%% top copy shifted by #1 at height H (vertices n+1..2n); faces registered
+\cs_new_protected:Npn \__mf_regular_base:n #1
+  {
+    \int_step_inline:nn {\l__mf_n_int}
+      {
+        \__mf_set:nn {th} { -90 - 180/\l__mf_n_int + (##1-1)*360/\l__mf_n_int }
+        \__mf_P:nnnn {v##1} { \__mf_v:n{R}*cosd(\__mf_v:n{th}) } {0} { \__mf_v:n{R}*sind(\__mf_v:n{th}) }
+        \__mf_P:nnnn {v\int_eval:n{##1+\l__mf_n_int}} { \__mf_v:n{R}*cosd(\__mf_v:n{th}) + #1 } {\__mf_v:n{H}} { \__mf_v:n{R}*sind(\__mf_v:n{th}) }
+      }
+    \__mf_face:x { \int_step_function:nN {\l__mf_n_int} \__mf_comma:n }
+    \__mf_face:x { \int_step_function:nnN {\l__mf_n_int+1} {2*\l__mf_n_int} \__mf_comma:n }
+    \int_step_inline:nn {\l__mf_n_int}
+      { \__mf_face:x { ##1, \int_eval:n{\int_mod:nn{##1}{\l__mf_n_int}+1}, \int_eval:n{\int_mod:nn{##1}{\l__mf_n_int}+1+\l__mf_n_int}, \int_eval:n{##1+\l__mf_n_int} } }
+  }
+\cs_new:Npn \__mf_comma:n #1 { #1, }
+\cs_generate_variant:Nn \__mf_face:n {x}
+%% =============================================================== \mfPyramid
+\NewDocumentCommand \mfPyramid { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/solid}{#1}
+    \int_set:Nn \l_mf_round_int { \mf_sk:n{round} }
+    \__mf_proj_setup:
+    \int_zero:N \l__mf_nf_int
+    \str_if_eq:eeTF { \mf_sk:n{base} } {regular}
+      {
+        \int_set:Nn \l__mf_n_int { \mf_sk:n{n} }
+        \__mf_set:nn {S} { \tl_if_blank:eTF {\mf_sk:n{side}} { \tl_if_blank:eTF {\mf_sk:n{apothem}} {4} { 2*(\mf_sk:n{apothem})*tand(180/\l__mf_n_int) } } {\mf_sk:n{side}} }
+        \__mf_set:nn {R} { \__mf_v:n{S}/(2*sind(180/\l__mf_n_int)) } \__mf_set:nn {ap} { \__mf_v:n{R}*cosd(180/\l__mf_n_int) }
+        \__mf_set:nn {fd} { \__mf_v:n{ap} } % centre to the middle of the front edge
+        \__mf_set:nn {ox} {0} \__mf_set:nn {oz} {0}
+      }
+      {
+        \int_set:Nn \l__mf_n_int {4}
+        \__mf_set:nn {L} { \mf_sval:nn{length}{6} } \__mf_set:nn {W} { \mf_sval:nn{width}{6} }
+        \__mf_set:nn {fd} { \__mf_v:n{W}/2 }
+        \__mf_set:nn {ox} { \__mf_v:n{L}/2 } \__mf_set:nn {oz} { \__mf_v:n{W}/2 }
+      }
+    % height from slant height (to the middle of the front edge) when not given
+    \__mf_set:nn {H} { \tl_if_blank:eTF {\mf_sk:n{height}}
+        { \tl_if_blank:eTF {\mf_sk:n{slant}} {4} { sqrt(max((\mf_sk:n{slant})^2-(\__mf_v:n{fd})^2, 0.01)) } } {\mf_sk:n{height}} }
+    \__mf_set:nn {lean} { \int_compare:nNnTF {\mf_sbool:n{oblique}} = 1 { \mf_sval:nn{lean}{0.6*\__mf_v:n{fd}} } {0} }
+    \__mf_set:nn {sl} { sqrt((\__mf_v:n{H})^2+(\__mf_v:n{fd})^2) }
+    \int_set:Nn \l__mf_nv_int { \l__mf_n_int + 1 }
+    \str_if_eq:eeTF { \mf_sk:n{base} } {regular}
+      {
+        \int_step_inline:nn {\l__mf_n_int}
+          { \__mf_set:nn {th} { -90 - 180/\l__mf_n_int + (##1-1)*360/\l__mf_n_int }
+            \__mf_P:nnnn {v##1} { \__mf_v:n{R}*cosd(\__mf_v:n{th}) } {0} { \__mf_v:n{R}*sind(\__mf_v:n{th}) } }
+      }
+      {
+        \__mf_P:nnnn {v1} {0} {0} {0}  \__mf_P:nnnn {v2} {\__mf_v:n{L}} {0} {0}
+        \__mf_P:nnnn {v3} {\__mf_v:n{L}} {0} {\__mf_v:n{W}}  \__mf_P:nnnn {v4} {0} {0} {\__mf_v:n{W}}
+      }
+    \__mf_P:nnnn {v\int_use:N\l__mf_nv_int} { \__mf_v:n{ox}+\__mf_v:n{lean} } {\__mf_v:n{H}} {\__mf_v:n{oz}}
+    \__mf_face:x { \int_step_function:nN {\l__mf_n_int} \__mf_comma:n }
+    \int_step_inline:nn {\l__mf_n_int}
+      { \__mf_face:x { ##1, \int_eval:n{\int_mod:nn{##1}{\l__mf_n_int}+1}, \int_use:N\l__mf_nv_int } }
+    \__mf_sfit:n { \l__mf_nv_int }
+    \__mf_solid_begin: \__mf_polyhedron:
+    \tl_set:Nx \l__mf_apex_tl { v\int_use:N\l__mf_nv_int }
+    % height line
+    \__mf_P:nnnn {c} {\__mf_v:n{ox}} {0} {\__mf_v:n{oz}}
+    \__mf_P:nnnn {foot} {\__mf_v:n{ox}+\__mf_v:n{lean}} {0} {\__mf_v:n{oz}}
+    \int_compare:nNnT { \mf_sbool:n{show~height} } = 1
+      {
+        \__mf_segt:nnn {\l__mf_apex_tl} {foot} {mf~dashed}
+        \fp_compare:nNnT { abs(\__mf_v:n{lean}) } > {1e-6} { \__mf_segt:nnn {c} {foot} {mf~dashed} }
+        \__mf_sqt:nnn {foot} {0,1,0} { \fp_compare:nNnTF {\__mf_v:n{lean}} > {1e-6} {-1,0,0} {1,0,0} }
+        \__mf_slab:nnn {height} {\__mf_v:n{H}} {\int_eval:n{ \int_max:nn {\mf_sgiven:n{height}} {1-\mf_sgiven:n{slant}} }}
+        \__mf_ilab:nnVn {\l__mf_apex_tl} {foot} \l_mf_lab_tl {180}
+      }
+    % slant height to the middle of the front edge
+    \__mf_slab:nnn {slant} {\__mf_v:n{sl}} {\mf_sgiven:n{slant}}
+    \tl_if_blank:VF \l_mf_lab_tl
+      {
+        \__mf_P:nnnn {sm} {(\__mf_v:n{v1x}+\__mf_v:n{v2x})/2} {0} {\__mf_v:n{v1z}}
+        \__mf_segt:nnn {\l__mf_apex_tl} {sm} { \int_compare:nNnTF {\__mf_fvis:n{2}} = 1 {mf~thin} {mf~hidden} }
+        \__mf_sqt:nnn {sm} {1,0,0} { \__mf_v:n{lean}+\__mf_v:n{ox}-\__mf_v:n{smx}, \__mf_v:n{H}, \__mf_v:n{oz} }
+        \__mf_ilab:nnVn {\l__mf_apex_tl} {sm} \l_mf_lab_tl {0}
+      }
+    \str_if_eq:eeTF { \mf_sk:n{base} } {regular}
+      {
+        \__mf_slab:nnn {side} {\__mf_v:n{S}} {1} \__mf_elab:nno {v1} {v2} \l_mf_lab_tl
+        \__mf_slab:nnn {apothem} {\__mf_v:n{ap}} {\mf_sgiven:n{apothem}}
+        \tl_if_blank:VF \l_mf_lab_tl
+          {
+            \__mf_P:nnnn {m} {0} {0} {-\__mf_v:n{ap}}
+            \__mf_segt:nnn {c} {m} {mf~dashed} \__mf_sqt:nnn {m} {0,0,1} {1,0,0}
+            \__mf_ilab:nnVn {c} {m} \l_mf_lab_tl {0}
+          }
+      }
+      {
+        \__mf_slab:nnn {length} {\__mf_v:n{L}} {1} \__mf_elab:nno {v1} {v2} \l_mf_lab_tl
+        \__mf_slab:nnn {width} {\__mf_v:n{W}} {1}
+        \int_compare:nNnTF {\__mf_depthleft:} = 1 { \__mf_elab:nno {v1} {v4} \l_mf_lab_tl } { \__mf_elab:nno {v2} {v3} \l_mf_lab_tl }
+      }
+    \__mf_vnames:n { \l__mf_nv_int }
+    \__mf_solid_end:
+    \group_end:
+  }
+\tl_new:N \l__mf_apex_tl
+%% =============================================================== round solids (2-D construction)
+%% ellipse ratio e for circles seen from slightly above
+\cs_new:Npn \__mf_pt:nn #1#2 { (\__mf_r:n{#1},\__mf_r:n{#2}) }
+\cs_new_protected:Npn \__mf_ellarc:nnnnnn #1#2#3#4#5#6 % cx cy rx ry start end, style in \l__mf_sty_tl
+  { \use:e { \exp_not:N \draw[\l__mf_sty_tl] (\__mf_r:n{(#1)+(#3)*cosd(#5)},\__mf_r:n{(#2)+(#4)*sind(#5)})
+      arc[start~angle=\__mf_r:n{#5}, end~angle=\__mf_r:n{#6}, x~radius=\__mf_r:n{#3}, y~radius=\__mf_r:n{#4}]; } }
+\tl_new:N \l__mf_sty_tl
+\cs_new_protected:Npn \__mf_Ptwo:nnn #1#2#3 { \__mf_set:nn {#1x} {#2} \__mf_set:nn {#1y} {#3} \__mf_set:nn {#1z} {0} }
+%% centre label on a horizontal radius/diameter: from (#1,#2) to (#3,#4), text #5, above (1) or below (0) #6
+\cs_new_protected:Npn \__mf_hlab:nnnnnn #1#2#3#4#5#6
+  {
+    \use:e { \exp_not:N \mf@seg {\__mf_r:n{#1}} {\__mf_r:n{#2}} {\__mf_r:n{#3}} {\__mf_r:n{#4}} {mf~thin,~line~width=0.8pt} }
+    \tl_if_blank:nF {#5}
+      { \use:e { \exp_not:N \mf@nodeA {\__mf_r:n{((#1)+(#3))/2}} {\__mf_r:n{((#2)+(#4))/2 + \int_compare:nNnTF{#6}=1{0.04}{-0.04}}}
+          { \exp_not:N \mflab {\exp_not:n{#5}} } { \int_compare:nNnTF{#6}=1{south}{north} } {} } }
+  }
+\cs_generate_variant:Nn \__mf_hlab:nnnnnn {nnnnVn}
+\cs_new_protected:Npn \__mf_round_setup:nn #1#2 % natural width, height -> sc
+  {
+    \__mf_set:nn {sc} { min( \mf_sk:n{fig~width}/max(#1,1e-3), \mf_sk:n{fig~height}/max(#2,1e-3) ) }
+    \__mf_set:nn {kc} {0} \__mf_set:nn {ks} {0}
+  }
+\fp_const:Nn \c__mf_ell_fp {0.33}
+%% Note: as on the site, with diameter=true the value of `radius' is the diameter.
+%% =============================================================== \mfCylinder
+\NewDocumentCommand \mfCylinder { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/solid}{#1}
+    \int_set:Nn \l_mf_round_int { \mf_sk:n{round} }
+    \__mf_set:nn {r0} { \mf_sval:nn{radius}{3} / (\mf_sbool:n{diameter}+1) } \__mf_set:nn {h0} { \mf_sval:nn{height}{4} }
+    \__mf_set:nn {l0} { \int_compare:nNnTF {\mf_sbool:n{oblique}} = 1 { \mf_sval:nn{lean}{3} } {0} }
+    \__mf_round_setup:nn { 2*\__mf_v:n{r0}+abs(\__mf_v:n{l0}) } { \__mf_v:n{h0}+0.66*\__mf_v:n{r0} }
+    \__mf_set:nn {r} { \__mf_v:n{sc}*\__mf_v:n{r0} } \__mf_set:nn {h} { \__mf_v:n{sc}*\__mf_v:n{h0} } \__mf_set:nn {l} { \__mf_v:n{sc}*\__mf_v:n{l0} }
+    \__mf_set:nn {e} { \__mf_v:n{r}*\fp_use:N\c__mf_ell_fp }
+    \__mf_set:nn {t0} { atand(-\fp_use:N\c__mf_ell_fp*\__mf_v:n{l}, \__mf_v:n{h}) }   % silhouette tangent parameter
+    \__mf_solid_begin:
+      \int_compare:nNnT { \mf_sbool:n{hidden} } = 1
+        { \tl_set:Nn \l__mf_sty_tl {mf~hidden} \__mf_ellarc:nnnnnn {0} {0} {\__mf_v:n{r}} {\__mf_v:n{e}} {\__mf_v:n{t0}} {\__mf_v:n{t0}+180} }
+      \tl_set:Nn \l__mf_sty_tl {mf}
+      \__mf_ellarc:nnnnnn {0} {0} {\__mf_v:n{r}} {\__mf_v:n{e}} {\__mf_v:n{t0}+180} {\__mf_v:n{t0}+360}
+      \__mf_ellarc:nnnnnn {\__mf_v:n{l}} {\__mf_v:n{h}} {\__mf_v:n{r}} {\__mf_v:n{e}} {0} {360}
+      \use:e { \exp_not:N \mf@seg {\__mf_r:n{\__mf_v:n{r}*cosd(\__mf_v:n{t0})}} {\__mf_r:n{\__mf_v:n{e}*sind(\__mf_v:n{t0})}}
+                  {\__mf_r:n{\__mf_v:n{l}+\__mf_v:n{r}*cosd(\__mf_v:n{t0})}} {\__mf_r:n{\__mf_v:n{h}+\__mf_v:n{e}*sind(\__mf_v:n{t0})}} {mf} }
+      \use:e { \exp_not:N \mf@seg {\__mf_r:n{-\__mf_v:n{r}*cosd(\__mf_v:n{t0})}} {\__mf_r:n{-\__mf_v:n{e}*sind(\__mf_v:n{t0})}}
+                  {\__mf_r:n{\__mf_v:n{l}-\__mf_v:n{r}*cosd(\__mf_v:n{t0})}} {\__mf_r:n{\__mf_v:n{h}-\__mf_v:n{e}*sind(\__mf_v:n{t0})}} {mf} }
+      % radius or diameter on the top face
+      \int_compare:nNnTF { \mf_sbool:n{diameter} } = 1
+        { \__mf_slab:nnn {radius} {2*\__mf_v:n{r0}} {1}
+          \__mf_hlab:nnnnVn {\__mf_v:n{l}-\__mf_v:n{r}} {\__mf_v:n{h}} {\__mf_v:n{l}+\__mf_v:n{r}} {\__mf_v:n{h}} \l_mf_lab_tl {1} }
+        { \__mf_slab:nnn {radius} {\__mf_v:n{r0}} {1}
+          \__mf_hlab:nnnnVn {\__mf_v:n{l}} {\__mf_v:n{h}} {\__mf_v:n{l}+(\__mf_v:n{l} > 1e-6 ? -1 : 1)*\__mf_v:n{r}} {\__mf_v:n{h}} \l_mf_lab_tl {1}
+          \int_compare:nNnT { \mf_sbool:n{center~dot} } = 1 { \use:e { \exp_not:N \mf@dot {\__mf_v:n{l}} {\__mf_v:n{h}} {} } } }
+      \__mf_slab:nnn {height} {\__mf_v:n{h0}} {1}
+      \fp_compare:nNnTF { abs(\__mf_v:n{l}) } < {1e-6}
+        { % height along the right side
+          \tl_if_blank:VF \l_mf_lab_tl
+            { \use:e { \exp_not:N \mf@nodeA {\__mf_r:n{\__mf_v:n{r}+0.06}} {\__mf_r:n{\__mf_v:n{h}/2}} {\exp_not:N\mflab{\exp_not:V\l_mf_lab_tl}} {west} {} } }
+        }
+        { % oblique: dashed height from the top centre, foot square, lean along the base
+          \int_compare:nNnT { \mf_sbool:n{show~height} } = 1
+            {
+              \use:e { \exp_not:N \mf@seg {\__mf_v:n{l}} {\__mf_v:n{h}} {\__mf_v:n{l}} {0} {mf~dashed} }
+              \use:e { \exp_not:N \mf@seg {0} {0} {\__mf_v:n{l}} {0} {mf~dashed} }
+              \int_compare:nNnT { \mf_sbool:n{right~angle~squares} } = 1
+                { \use:e { \exp_not:N \mf@path {mf~thin} { (\__mf_r:n{\__mf_v:n{l}-0.2*sign(\__mf_v:n{l})},0) -- (\__mf_r:n{\__mf_v:n{l}-0.2*sign(\__mf_v:n{l})},0.2) -- (\__mf_v:n{l},0.2) } } }
+              \tl_if_blank:VF \l_mf_lab_tl
+                { \use:e { \exp_not:N \mf@nodeA {\__mf_v:n{l}} {\__mf_r:n{\__mf_v:n{h}/2}} {\exp_not:N\mflab{\exp_not:V\l_mf_lab_tl}} {center} {mf~halo} } }
+              \__mf_slab:nnn {lean} {abs(\__mf_v:n{l0})} {\mf_sgiven:n{lean}}
+              \tl_if_blank:VF \l_mf_lab_tl
+                { \use:e { \exp_not:N \mf@nodeA {\__mf_r:n{\__mf_v:n{l}/2}} {-0.04} {\exp_not:N\mflab{\exp_not:V\l_mf_lab_tl}} {north} {mf~halo} } }
+            }
+          \__mf_slab:nnn {slant} { sqrt((\__mf_v:n{l0})^2+(\__mf_v:n{h0})^2) } {\mf_sgiven:n{slant}}
+          \tl_if_blank:VF \l_mf_lab_tl
+            { \use:e { \exp_not:N \mf@nodeA {\__mf_r:n{\__mf_v:n{l}/2+\__mf_v:n{r}+0.08}} {\__mf_r:n{\__mf_v:n{h}/2}} {\exp_not:N\mflab{\exp_not:V\l_mf_lab_tl}} {west} {} } }
+        }
+    \__mf_solid_end:
+    \group_end:
+  }
+%% =============================================================== \mfCone
+\NewDocumentCommand \mfCone { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/solid}{#1}
+    \int_set:Nn \l_mf_round_int { \mf_sk:n{round} }
+    \__mf_set:nn {r0} { \mf_sval:nn{radius}{3} / (\mf_sbool:n{diameter}+1) }
+    \__mf_set:nn {h0} { \tl_if_blank:eTF {\mf_sk:n{height}}
+        { \tl_if_blank:eTF {\mf_sk:n{slant}} {4} { sqrt(max((\mf_sk:n{slant})^2-(\__mf_v:n{r0})^2,0.01)) } } {\mf_sk:n{height}} }
+    \__mf_set:nn {l0} { \int_compare:nNnTF {\mf_sbool:n{oblique}} = 1 { \mf_sval:nn{lean}{3} } {0} }
+    \__mf_round_setup:nn { 2*\__mf_v:n{r0}+max(abs(\__mf_v:n{l0})-\__mf_v:n{r0},0) } { \__mf_v:n{h0}+0.33*\__mf_v:n{r0} }
+    \__mf_set:nn {r} { \__mf_v:n{sc}*\__mf_v:n{r0} } \__mf_set:nn {h} { \__mf_v:n{sc}*\__mf_v:n{h0} } \__mf_set:nn {l} { \__mf_v:n{sc}*\__mf_v:n{l0} }
+    \__mf_set:nn {e} { \fp_use:N\c__mf_ell_fp }
+    % tangent points t = phi +- acos(e r / R)
+    \__mf_set:nn {RR} { sqrt((\__mf_v:n{e}*\__mf_v:n{l})^2+(\__mf_v:n{h})^2) }
+    \__mf_set:nn {phi} { atand(\__mf_v:n{h}, \__mf_v:n{e}*\__mf_v:n{l}) }
+    \__mf_set:nn {del} { acosd(min(1, \__mf_v:n{e}*\__mf_v:n{r}/\__mf_v:n{RR})) }
+    \__mf_set:nn {t1} { \__mf_v:n{phi}+\__mf_v:n{del} } \__mf_set:nn {t2} { \__mf_v:n{phi}-\__mf_v:n{del}+360 }
+    \__mf_set:nn {ey} { \__mf_v:n{e}*\__mf_v:n{r} }
+    \__mf_solid_begin:
+      \int_compare:nNnT { \mf_sbool:n{hidden} } = 1
+        { \tl_set:Nn \l__mf_sty_tl {mf~hidden} \__mf_ellarc:nnnnnn {0} {0} {\__mf_v:n{r}} {\__mf_v:n{ey}} {\__mf_v:n{t2}-360} {\__mf_v:n{t1}} }
+      \tl_set:Nn \l__mf_sty_tl {mf}
+      \__mf_ellarc:nnnnnn {0} {0} {\__mf_v:n{r}} {\__mf_v:n{ey}} {\__mf_v:n{t1}} {\__mf_v:n{t2}}
+      \use:e { \exp_not:N \mf@path {mf} { (\__mf_r:n{\__mf_v:n{r}*cosd(\__mf_v:n{t1})},\__mf_r:n{\__mf_v:n{ey}*sind(\__mf_v:n{t1})}) --
+          (\__mf_v:n{l},\__mf_v:n{h}) -- (\__mf_r:n{\__mf_v:n{r}*cosd(\__mf_v:n{t2})},\__mf_r:n{\__mf_v:n{ey}*sind(\__mf_v:n{t2})}) } }
+      % height
+      \__mf_slab:nnn {height} {\__mf_v:n{h0}} {\int_eval:n{ \int_max:nn {\mf_sgiven:n{height}} {1-\mf_sgiven:n{slant}} }}
+      \tl_set_eq:NN \l_tmpb_tl \l_mf_lab_tl
+      \int_compare:nNnT { \mf_sbool:n{show~height} } = 1
+        {
+          \use:e { \exp_not:N \mf@seg {\__mf_v:n{l}} {\__mf_v:n{h}} {\__mf_v:n{l}} {0} {mf~dashed} }
+          \fp_compare:nNnT { abs(\__mf_v:n{l}) } > {\__mf_v:n{r}} { \use:e { \exp_not:N \mf@seg {\__mf_r:n{sign(\__mf_v:n{l})*\__mf_v:n{r}}} {0} {\__mf_v:n{l}} {0} {mf~dashed} } }
+          \int_compare:nNnT { \mf_sbool:n{right~angle~squares} } = 1
+            { \use:e { \exp_not:N \mf@path {mf~thin} { (\__mf_r:n{\__mf_v:n{l}+(\__mf_v:n{l} > 1e-6 ? -0.2 : 0.2)},0) -- (\__mf_r:n{\__mf_v:n{l}+(\__mf_v:n{l} > 1e-6 ? -0.2 : 0.2)},0.2) -- (\__mf_v:n{l},0.2) } } }
+          \tl_if_blank:VF \l_tmpb_tl
+            { \use:e { \exp_not:N \mf@nodeA {\__mf_r:n{\__mf_v:n{l}-0.06}} {\__mf_r:n{\__mf_v:n{h}*0.55}} {\exp_not:N\mflab{\exp_not:V\l_tmpb_tl}} {east} {mf~halo} } }
+        }
+      \int_compare:nNnT { \mf_sbool:n{center~dot} * (1-\mf_sbool:n{diameter}) } = 1 { \use:e { \exp_not:N \mf@dot {0} {0} {} } }
+      \int_compare:nNnTF { \mf_sbool:n{diameter} } = 1
+        { \__mf_slab:nnn {radius} {2*\__mf_v:n{r0}} {1} \__mf_hlab:nnnnVn {-\__mf_v:n{r}} {0} {\__mf_v:n{r}} {0} \l_mf_lab_tl {0} }
+        { \__mf_slab:nnn {radius} {\__mf_v:n{r0}} {1} \__mf_hlab:nnnnVn {0} {0} {\__mf_v:n{r}} {0} \l_mf_lab_tl {0} }
+      % slant height on the right side
+      \__mf_slab:nnn {slant} { sqrt((\__mf_v:n{r0}-\__mf_v:n{l0})^2+(\__mf_v:n{h0})^2) } {\mf_sgiven:n{slant}}
+      \tl_if_blank:VF \l_mf_lab_tl
+        { \use:e { \exp_not:N \mf@nodeA {\__mf_r:n{(\__mf_v:n{l}+\__mf_v:n{r}*cosd(\__mf_v:n{t2}))/2+0.08}} {\__mf_r:n{(\__mf_v:n{h}+\__mf_v:n{ey}*sind(\__mf_v:n{t2}))/2}} {\exp_not:N\mflab{\exp_not:V\l_mf_lab_tl}} {west} {} } }
+    \__mf_solid_end:
+    \group_end:
+  }
+%% =============================================================== \mfSphere  (shape = whole | hemisphere, bowl)
+\NewDocumentCommand \mfSphere { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/solid}{#1}
+    \int_set:Nn \l_mf_round_int { \mf_sk:n{round} }
+    \__mf_set:nn {r0} { \mf_sval:nn{radius}{3} / (\mf_sbool:n{diameter}+1) }
+    \__mf_round_setup:nn { 2*\__mf_v:n{r0} } { \str_if_eq:eeTF{\mf_sk:n{shape}}{hemisphere}{1.33}{2}*\__mf_v:n{r0} }
+    \__mf_set:nn {r} { \__mf_v:n{sc}*\__mf_v:n{r0} } \__mf_set:nn {ey} { \fp_use:N\c__mf_ell_fp*\__mf_v:n{r} }
+    \__mf_solid_begin:
+      \str_if_eq:eeTF { \mf_sk:n{shape} } {hemisphere}
+        {
+          \int_compare:nNnTF { \mf_sbool:n{bowl} } = 1
+            {
+              \use:e { \exp_not:N \draw[mf] (\__mf_v:n{r},0) arc[start~angle=0, end~angle=-180, radius=\__mf_v:n{r}]; }
+              \tl_set:Nn \l__mf_sty_tl {mf} \__mf_ellarc:nnnnnn {0} {0} {\__mf_v:n{r}} {\__mf_v:n{ey}} {0} {360}
+            }
+            {
+              \use:e { \exp_not:N \draw[mf] (\__mf_v:n{r},0) arc[start~angle=0, end~angle=180, radius=\__mf_v:n{r}]; }
+              \tl_set:Nn \l__mf_sty_tl {mf} \__mf_ellarc:nnnnnn {0} {0} {\__mf_v:n{r}} {\__mf_v:n{ey}} {180} {360}
+              \int_compare:nNnT { \mf_sbool:n{hidden} } = 1
+                { \tl_set:Nn \l__mf_sty_tl {mf~hidden} \__mf_ellarc:nnnnnn {0} {0} {\__mf_v:n{r}} {\__mf_v:n{ey}} {0} {180} }
+            }
+        }
+        {
+          \use:e { \exp_not:N \draw[mf] (0,0) circle[radius=\__mf_v:n{r}]; }
+          \tl_set:Nn \l__mf_sty_tl {mf} \__mf_ellarc:nnnnnn {0} {0} {\__mf_v:n{r}} {\__mf_v:n{ey}} {180} {360}
+          \int_compare:nNnT { \mf_sbool:n{hidden} } = 1
+            { \tl_set:Nn \l__mf_sty_tl {mf~hidden} \__mf_ellarc:nnnnnn {0} {0} {\__mf_v:n{r}} {\__mf_v:n{ey}} {0} {180} }
+        }
+      \int_compare:nNnTF { \mf_sbool:n{diameter} } = 1
+        { \__mf_slab:nnn {radius} {2*\__mf_v:n{r0}} {1} \__mf_hlab:nnnnVn {-\__mf_v:n{r}} {0} {\__mf_v:n{r}} {0} \l_mf_lab_tl {1} }
+        { \__mf_slab:nnn {radius} {\__mf_v:n{r0}} {1} \__mf_hlab:nnnnVn {0} {0} {\__mf_v:n{r}} {0} \l_mf_lab_tl {1}
+          \int_compare:nNnT { \mf_sbool:n{center~dot} } = 1 { \use:e { \exp_not:N \mf@dot {0} {0} {} } } }
+    \__mf_solid_end:
+    \group_end:
+  }
+\ExplSyntaxOff
