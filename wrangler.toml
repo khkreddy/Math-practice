@@ -7,15 +7,15 @@ compatibility_date = "2025-04-01"
 
 [[kv_namespaces]]
 binding = "SHEETS"
-id = "00000000000000000000000000000001"
+id = "d2022aefeaa84f18bb02bd5364092b55"
 
 [[kv_namespaces]]
 binding = "SUBMISSIONS"
-id = "00000000000000000000000000000002"
+id = "9f9d86c46a514829a7d310cfd89fdd82"
 
 [[kv_namespaces]]
 binding = "PROFILE"
-id = "00000000000000000000000000000003"
+id = "bae657792d4d4a228f5bcbc8f8d681f0"
 
 [vars]
 # Browser origin of the GitHub Pages site (no path). The quiz is served at

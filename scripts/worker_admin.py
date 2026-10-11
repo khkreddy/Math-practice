@@ -22,7 +22,13 @@ def request(method, path, body=None, query=None):
     if query:
         url += "?" + urllib.parse.urlencode(query)
     data = None
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+        # Cloudflare error 1010 (HTTP 403) on workers.dev when urllib's
+        # default User-Agent is sent. This value is accepted.
+        "User-Agent": "math-practice-admin/1.0",
+    }
     if body is not None:
         data = json.dumps(body).encode("utf-8")
         headers["Content-Type"] = "application/json"

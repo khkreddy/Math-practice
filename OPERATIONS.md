@@ -9,7 +9,7 @@ No tokens, answer keys, or student details belong in this file. Those stay on th
 Write the student-facing JSON (see `schema/sheet.schema.json` and `content/sheets/2026-10-11-p1.json`). Write the answer key beside it, outside this repo (`schema/answer-key.schema.json`).
 
 ```bash
-export WORKER_URL=https://math-practice.<account>.workers.dev
+export WORKER_URL=https://math-practice.khkreddy.workers.dev
 export ADMIN_TOKEN=...
 python3 scripts/create_sheet.py --sheet content/sheets/<id>.json --key /path/to/<id>.key.json
 ```

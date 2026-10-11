@@ -20,7 +20,7 @@ The student link looks like:
 
 The token is printed by `scripts/create_sheet.py`. It is not stored in git.
 
-`web/config.js` has an empty `workerUrl` until the Worker is deployed. Set it to the `workers.dev` origin (no trailing slash) and push to `main`. For a local Worker, open the page with `&api=http://127.0.0.1:8787`.
+`web/config.js` points at `https://math-practice.khkreddy.workers.dev`. For a local Worker, open the page with `&api=http://127.0.0.1:8787`.
 
 ## What the student sees
 
@@ -51,21 +51,13 @@ CORS allows `https://khkreddy.github.io` and `http://localhost` / `http://127.0.
 
 From this directory, with the Cloudflare account that owns the project:
 
+`wrangler.toml` has the SHEETS, SUBMISSIONS, and PROFILE namespace ids, and `web/config.js` points at the deployed Worker. To deploy again:
+
 ```bash
 npx wrangler login
-npx wrangler kv namespace create SHEETS
-npx wrangler kv namespace create SUBMISSIONS
-npx wrangler kv namespace create PROFILE
-```
-
-Replace the three placeholder ids in `wrangler.toml` with the ids that command prints. Then:
-
-```bash
 npx wrangler secret put ADMIN_TOKEN
 npx wrangler deploy
 ```
-
-`wrangler deploy` prints the Worker URL. Put that origin in `web/config.js` and push to `main`.
 
 Local run:
 
@@ -81,7 +73,7 @@ npx wrangler dev
 They read `WORKER_URL` and `ADMIN_TOKEN` from the environment.
 
 ```bash
-export WORKER_URL=https://math-practice.<account>.workers.dev
+export WORKER_URL=https://math-practice.khkreddy.workers.dev
 export ADMIN_TOKEN=...
 python3 scripts/create_sheet.py \
   --sheet content/sheets/2026-10-11-p1.json \
