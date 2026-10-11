@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ttwin://harness/modify/schema/modify_result.v1.json",
+  "title": "modify_result.v1",
+  "description": "Model output for T-MOD. Cross-field rules (format honesty, figure-stem agreement, whitelist projection, key existence, variation conformance, join honesty) are enforced by gates G1-G8 in MODIFY_SPEC, not by this schema alone.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "status", "teacher"],
+  "properties": {
+    "schema": { "const": "modify_result.v1" },
+    "status": { "enum": ["OK", "REFUSED"] },
+    "refusal_reason": { "type": "string", "maxLength": 300, "description": "Required when status is REFUSED. A clean failure, not drift." },
+    "item_type": { "enum": ["single_mcq", "one_or_more", "three_statement", "structured_parts", "open_response", "option_table", "options_are_figure"] },
+    "stem": { "type": "string", "maxLength": 4000 },
+    "options": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "text"],
+        "properties": {
+          "id": { "type": "string", "maxLength": 4 },
+          "text": { "type": "string", "maxLength": 1000 },
+          "tikz": { "type": "string", "maxLength": 6000, "description": "Payload for options_are_figure. Still one visual per item overall." }
+        }
+      }
+    },
+    "statements": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "text"],
+        "properties": {
+          "id": { "type": "string", "maxLength": 8 },
+          "text": { "type": "string", "maxLength": 1000 }
+        }
+      }
+    },
+    "parts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "text"],
+        "properties": {
+          "id": { "type": "string", "maxLength": 8 },
+          "text": { "type": "string", "maxLength": 2000 },
+          "marks": { "type": "integer", "minimum": 0, "maximum": 20 },
+          "answer_space": { "type": "string", "maxLength": 300 },
+          "rubric": { "type": "string", "maxLength": 500 }
+        }
+      }
+    },
+    "equations": { "type": "array", "maxItems": 6, "items": { "type": "string", "maxLength": 1000 } },
+    "tables": { "type": "array", "maxItems": 6, "items": { "type": "string", "maxLength": 1000 } },
+    "tikz": { "type": ["string", "null"], "maxLength": 6000, "description": "At most one visual. Null when the item has no figure." },
+    "answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["single_letter", "letter_set", "statement_pattern", "part_answers", "rubric"] },
+        "letter": { "type": "string", "pattern": "^[A-F]$" },
+        "letters": { "type": "array", "minItems": 2, "maxItems": 6, "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-F]$" }, "description": "Declared multi-correct key, e.g. [\"B\",\"C\"]. Honest sets only." },
+        "pattern": { "type": "array", "minItems": 2, "maxItems": 5, "items": { "enum": ["T", "F"] } },
+        "part_answers": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["part_id", "answer"],
+            "properties": {
+              "part_id": { "type": "string", "maxLength": 8 },
+              "answer": { "type": "string", "maxLength": 1000 }
+            }
+          }
+        },
+        "rubric": { "type": "array", "maxItems": 8, "items": { "type": "string", "maxLength": 500 } }
+      }
+    },
+    "teacher": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["proposed_key_status", "variation_applied", "fidelity_selfcheck"],
+      "properties": {
+        "proposed_key_status": { "const": "UNVERIFIED" },
+        "key_rationale": { "type": "string", "maxLength": 500, "description": "Derivation of the new key. Required in spirit for V1/V6; teacher-side only." },
+        "variation_applied": { "enum": ["V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8"] },
+        "fidelity_selfcheck": { "type": "string", "maxLength": 300 },
+        "mx_links": { "type": "array", "maxItems": 4, "items": { "type": "string", "maxLength": 120 }, "description": "Which packet mx seeds were used. Teacher-only; never projected to learner fields." },
+        "figure_note": { "type": "string", "maxLength": 300 }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "REFUSED" } } },
+      "then": { "required": ["refusal_reason"] }
+    },
+    {
+      "if": { "properties": { "status": { "const": "OK" } } },
+      "then": { "required": ["item_type", "stem", "answer"] }
+    }
+  ]
+}

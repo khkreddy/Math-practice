@@ -1,0 +1,83 @@
+{
+  "schema": "miqg.cal.codes.v2",
+  "protocol": "MIQG-v1.0-rc9-CAL-KNGOOD-v2",
+  "master_protocol": "MIQG-v1.0-rc9",
+  "parent_protocol": "MIQG-v1.0-rc9-CAL-KNGOOD",
+  "rubric_hash": "6fe612237bbd429b8df0fe648b21e469041dc791fbfa9df09c5cf5634f3af0b6",
+  "gold_fp_ceiling": 0.02,
+  "counting_dq": [
+    "KEY_LETTER_ABSENT",
+    "KEY_WRONG",
+    "NO_UNIQUE_ANSWER",
+    "MISSING_REFERENT",
+    "PAYLOAD_MISSING",
+    "PART_ANSWER_MISSING",
+    "RECORD_INVALID",
+    "WHITELIST_LEAK",
+    "WHITELIST_PARAPHRASE_LEAK",
+    "FIGURE_ANSWER_LEAK",
+    "FIGURE_STEM_CONFLICT",
+    "ANSWER_IN_STEM"
+  ],
+  "candidate_only_dq": [
+    "UNSCORABLE"
+  ],
+  "counting_major": [
+    "PADDING",
+    "DISTRACTOR_RECIPE",
+    "FOREIGN_NOUN",
+    "CATCH_ALL_OPTION",
+    "FIGURE_DISTRACTOR_KILL"
+  ],
+  "candidate_only_major": [
+    "STEM_CONTEXT_THIN",
+    "OPTION_FRAME_UNCLEAR",
+    "SURFACE_FEATURE_RECALL",
+    "DISTRACTOR_UNJUSTIFIABLE",
+    "META_LANGUAGE",
+    "STEM_STACKED_TUTORIAL_CONCLUSION",
+    "STEM_DOUBLE_ASK",
+    "STEM_WORDCOUNT_PADDING",
+    "STEM_KEY_LEAK"
+  ],
+  "flags": [
+    "SYLLABUS_BOUND",
+    "SYLLABUS_UNBOUND",
+    "MX_INTENDED_SURFACE",
+    "HUMAN_OVERRIDE"
+  ],
+  "rectifiable": [
+    "KEY_LETTER_ABSENT",
+    "KEY_WRONG",
+    "PART_ANSWER_MISSING",
+    "UNSCORABLE",
+    "MISSING_REFERENT",
+    "FIGURE_ANSWER_LEAK",
+    "FIGURE_STEM_CONFLICT",
+    "ANSWER_IN_STEM",
+    "STEM_CONTEXT_THIN",
+    "OPTION_FRAME_UNCLEAR"
+  ],
+  "envelope_drop": [
+    "DISTRACTOR_IMPLAUSIBLE",
+    "DISTRACTOR_NONCAUSAL",
+    "REGISTER_BREACH",
+    "ORPHAN_DATUM",
+    "CONFOUND_DOMINANT",
+    "STATE_COLLAPSE",
+    "OPTION_CENTROID",
+    "SHORTCUT_DOMINANT",
+    "TELEGRAPHING_STEM",
+    "INVARIANT_GIVEAWAY",
+    "OPTION_HETEROGENEOUS",
+    "MX_ABSENT",
+    "MX_MISBINDING"
+  ],
+  "answer_in_stem_pairs": [
+    {
+      "id": "noncontact_thermometer",
+      "stem": "\\b(from a (?:short |long )?distance|without touching|not touching|without contact)\\b",
+      "key": "\\b(non-contact|infrared|remote)\\b"
+    }
+  ]
+}

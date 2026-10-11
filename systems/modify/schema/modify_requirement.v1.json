@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ttwin://harness/modify/schema/modify_requirement.v1.json",
+  "title": "modify_requirement.v1",
+  "description": "Input for slot T-MINT: mint a sitting item from a construct × hinge requirement. JEV plans the form; a writer generates; G17 and unbiased JEV classify gate release. Teacher-side. Never contains API keys.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "target_construct", "subject", "grade", "hinge_id"],
+  "properties": {
+    "schema": { "const": "modify_requirement.v1" },
+    "requirement_id": { "type": "string", "maxLength": 80, "description": "Session-scoped id. Never an exam.v1 freeze uid." },
+    "target_construct": {
+      "type": "string",
+      "pattern": "^(R|U|Ap|An|Ev|Cr)\\.(Fa|Co|Pr|Me)\\.[1-4]$",
+      "description": "Requested construct cell, e.g. An.Co.3. Release still requires unbiased JEV admission; this field is a brief, not a stamp."
+    },
+    "subject": { "type": "string", "maxLength": 40 },
+    "grade": { "type": "integer", "minimum": 1, "maximum": 13 },
+    "grade_band": {
+      "type": "string",
+      "enum": ["middle_6_8", "secondary_9_10", "senior_11_12", "olympiad_iit"]
+    },
+    "chapter": { "type": "string", "maxLength": 80 },
+    "hinge_id": { "type": "string", "maxLength": 120 },
+    "unit_id": {
+      "type": "string",
+      "maxLength": 160,
+      "description": "Map unit to bind before T-PLAN. When omitted, hinge_id is resolved to a unit whose zone contains target_construct."
+    },
+    "hinge_title": { "type": "string", "maxLength": 240 },
+    "intent": {
+      "type": "string",
+      "maxLength": 1000,
+      "description": "What the item should discriminate. Teacher-side only; never printed on the stem."
+    },
+    "accept_neighbour": {
+      "type": "boolean",
+      "default": false,
+      "description": "Legacy flag. Mint no longer retargets before the writer. An admitted cell is kept only when it is inside the bound unit zone."
+    },
+    "figure_mode": { "enum": ["none", "add"], "default": "none" }
+  }
+}

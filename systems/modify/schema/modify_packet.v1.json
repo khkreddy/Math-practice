@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ttwin://harness/modify/schema/modify_packet.v1.json",
+  "title": "modify_packet.v1",
+  "description": "Compiled T-MOD packet, built by assembleModifyPacket with zero model calls. Teacher-side; the learner whitelist is re-applied to the result by gates, not assumed of the packet.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "packet_id", "slot", "created_at", "source", "intelligence", "spec", "caps", "assembly"],
+  "properties": {
+    "schema": { "const": "modify_packet.v1" },
+    "packet_id": { "type": "string", "maxLength": 60, "description": "Session-scoped id. Never an exam.v1 freeze uid." },
+    "slot": { "const": "T-MOD" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item_ref", "item_type", "stem"],
+      "properties": {
+        "item_ref": { "type": "string", "maxLength": 80, "description": "Session-scoped reference to the bank item. Not a freeze uid." },
+        "item_type": { "enum": ["single_mcq", "one_or_more", "three_statement", "structured_parts", "open_response", "option_table", "options_are_figure"] },
+        "stem": { "type": "string", "maxLength": 4000 },
+        "options": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "text"],
+            "properties": {
+              "id": { "type": "string", "maxLength": 4 },
+              "text": { "type": "string", "maxLength": 1000 },
+              "tikz": { "type": "string", "maxLength": 6000 }
+            }
+          }
+        },
+        "statements": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "text"],
+            "properties": {
+              "id": { "type": "string", "maxLength": 8 },
+              "text": { "type": "string", "maxLength": 1000 }
+            }
+          }
+        },
+        "parts": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "text"],
+            "properties": {
+              "id": { "type": "string", "maxLength": 8 },
+              "text": { "type": "string", "maxLength": 2000 },
+              "marks": { "type": "integer", "minimum": 0, "maximum": 20 }
+            }
+          }
+        },
+        "equations": { "type": "array", "maxItems": 6, "items": { "type": "string", "maxLength": 1000 } },
+        "tables": { "type": "array", "maxItems": 6, "items": { "type": "string", "maxLength": 1000 } },
+        "tikz": { "type": "string", "maxLength": 6000, "description": "At most one visual." },
+        "key": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "description": "Original proposed key. Teacher-side only; never echoed into learner fields or hints.",
+          "properties": {
+            "kind": { "enum": ["single_letter", "letter_set", "statement_pattern", "part_answers", "rubric"] },
+            "letter": { "type": "string", "pattern": "^[A-F]$" },
+            "letters": { "type": "array", "minItems": 2, "maxItems": 6, "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-F]$" } },
+            "pattern": { "type": "array", "maxItems": 5, "items": { "enum": ["T", "F"] } },
+            "note": { "type": "string", "maxLength": 300 }
+          }
+        }
+      }
+    },
+    "intelligence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["join_status", "packed_tags"],
+      "properties": {
+        "join_status": { "enum": ["BOUND", "UNBOUND"] },
+        "hinge": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["primary", "title"],
+          "description": "One resolved row from the loaded slim map. Null when UNBOUND. Neighbors and adjacency never cross into the packet.",
+          "properties": {
+            "primary": { "type": "string", "maxLength": 120 },
+            "unit_id": { "type": "string", "maxLength": 120 },
+            "title": { "type": "string", "maxLength": 240, "description": "Map title = teacher-facing vocabulary." },
+            "node_labels": { "type": "array", "maxItems": 8, "items": { "type": "string", "maxLength": 120 } }
+          }
+        },
+        "packed_tags": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pack", "subject"],
+          "properties": {
+            "pack": { "enum": ["middle_6_8", "secondary_9_10", "senior_11_12", "olympiad_iit"] },
+            "subject": { "type": "string", "maxLength": 40 },
+            "level": { "type": "string", "maxLength": 40 },
+            "topic": { "type": "string", "maxLength": 120 },
+            "paper_hint": { "type": "string", "maxLength": 60 }
+          }
+        },
+        "mx": {
+          "type": "array",
+          "maxItems": 4,
+          "description": "Teacher-key mix-up seeds. They shape distractors; they are never printed to learner fields.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["mx_type", "name"],
+            "properties": {
+              "mx_type": { "type": "string", "maxLength": 60 },
+              "name": { "type": "string", "maxLength": 120 },
+              "teacher_note": { "type": "string", "maxLength": 300 }
+            }
+          }
+        },
+        "enrichment": { "type": ["string", "null"], "maxLength": 1500, "description": "Mechanism/misconception prose. Null is a fact; the builder never pads it." },
+        "lbs_recipe": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["unit", "gate_names"],
+          "description": "Compiled recipe per 82_LBS_COMPILER for (unit, mx/step), when present. Keeps new distractors gate-true.",
+          "properties": {
+            "unit": { "type": "string", "maxLength": 120 },
+            "step": { "type": "string", "maxLength": 60 },
+            "gate_names": { "type": "array", "maxItems": 6, "items": { "type": "string", "maxLength": 120 } },
+            "hint_skeleton": { "type": "string", "maxLength": 500 },
+            "retry_plan": { "type": "string", "maxLength": 300 }
+          }
+        },
+        "modify_seeds": { "type": "array", "maxItems": 4, "items": { "type": "string", "maxLength": 500 } }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instruction", "variation_class", "fidelity_mode", "target_item_type", "figure"],
+      "properties": {
+        "instruction": { "type": "string", "maxLength": 1000, "description": "Teacher instruction; may be a modify seed verbatim." },
+        "variation_class": { "enum": ["V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8"], "description": "Classes defined in isogen/ISO_GENERATION_PROTOCOL.md. Chosen by the compiler, never the model." },
+        "fidelity_mode": { "type": "string", "pattern": "^[A-Z][A-Z_]{2,}$", "description": "Fidelity ladder defined in isogen/ISO_GENERATION_PROTOCOL.md (FAITHFUL_TRANSFER ... BLOCKED). Default FAITHFUL_TRANSFER; the compiler may set BLOCKED before the model call." },
+        "target_item_type": { "enum": ["preserve", "single_mcq", "one_or_more", "three_statement", "structured_parts", "open_response", "option_table", "options_are_figure"] },
+        "format": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "n_options": { "type": "integer", "minimum": 2, "maximum": 6 },
+            "n_statements": { "type": "integer", "minimum": 2, "maximum": 5 },
+            "n_parts": { "type": "integer", "minimum": 1, "maximum": 8 }
+          }
+        },
+        "figure": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": {
+            "mode": { "enum": ["preserve", "rewrite", "add", "remove"], "description": "add is legal only when the teacher asked for a figure." },
+            "tikz_required": { "type": "boolean" },
+            "declared_delta": { "type": "string", "maxLength": 300, "description": "What the V5 rewrite claims to change. Checked against the TikZ diff; author comments are not evidence." },
+            "lbs_followup_of": { "type": "string", "maxLength": 80, "description": "Prior session item_ref. Stem may name a removed object only when this is set." }
+          }
+        }
+      }
+    },
+    "caps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hard_total_chars"],
+      "properties": {
+        "hard_total_chars": { "const": 16000 },
+        "tightened_from": { "const": "40_PACKETS" }
+      }
+    },
+    "assembly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["builder", "trimmed"],
+      "properties": {
+        "builder": { "const": "assembleModifyPacket" },
+        "trimmed": { "type": "array", "items": { "type": "string", "maxLength": 60 }, "description": "Fields trimmed under the deterministic trim order. Empty when nothing was trimmed." },
+        "slim_map_ref": { "type": "string", "maxLength": 80, "description": "Identifier of the loaded slim map used for the join. Records use; rewrites no map sha." }
+      }
+    }
+  }
+}

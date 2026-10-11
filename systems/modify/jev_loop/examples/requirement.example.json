@@ -1,0 +1,14 @@
+{
+  "schema": "modify_requirement.v1",
+  "requirement_id": "example-force-anco3",
+  "target_construct": "An.Co.3",
+  "subject": "science",
+  "grade": 7,
+  "grade_band": "middle_6_8",
+  "chapter": "motion_force",
+  "hinge_id": "S4/H-FORCE",
+  "hinge_title": "Force and pressure",
+  "intent": "Diagnose heavier-falls-faster: extra downward force without matching extra mass.",
+  "accept_neighbour": false,
+  "figure_mode": "none"
+}
