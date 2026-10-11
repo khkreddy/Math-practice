@@ -1,0 +1,164 @@
+% Original code written for Hari's teaching use; option set modelled on mathfigures.com (teacher.dev). No site code used.
+%% mathfig-ruler.code.tex -- \mfRuler (length reading with an optional magnifier).  Original code (see mathfig.sty).
+\pgfkeys{/mf/ruler/.cd, system/.initial=metric, ruler/.initial=, marks/.initial=, length/.initial=4.37, start/.initial=0,
+  object/.initial=cylinder, marbles/.initial=4, guides/.initial=false, view/.initial=magnifier, zoom/.initial=auto,
+  title/.initial=, answer/.initial=false, read/.initial=estimate, width/.initial=12, scale/.initial=1,
+  magnifier numbers/.initial=1}
+\ExplSyntaxOn
+\cs_new:Npn \mf_rk:n #1 { \pgfkeysvalueof{/mf/ruler/#1} }
+\cs_new:Npn \__mf_metric_p: { \str_if_eq:eeTF {\mf_rk:n{system}} {imperial} {0} {1} }
+%% smallest mark in ruler units: metric marks = mm | 0.5 | 1 | 5 | 10 (cm);  imperial marks = 1,2,4,8,16 (parts of an inch)
+\cs_new_protected:Npn \__mf_ruler_setup:
+  {
+    \__mf_set:nn {RL} { \tl_if_blank:eTF {\mf_rk:n{ruler}} { \int_compare:nNnTF {\__mf_metric_p:} = 1 {15} {6} } {\mf_rk:n{ruler}} }
+    \int_compare:nNnTF {\__mf_metric_p:} = 1
+      { \__mf_set:nn {m} { \str_case:enF { \mf_rk:n{marks} } { {mm}{0.1} {}{0.1} {cm}{1} } { \mf_rk:n{marks} } } }
+      { \__mf_set:nn {m} { 1/(\tl_if_blank:eTF {\mf_rk:n{marks}} {16} {\mf_rk:n{marks}}) } }
+    \__mf_set:nn {s} { \mf_rk:n{width} / \__mf_v:n{RL} }
+    \__mf_set:nn {ON} { 0.002 }
+    \int_set:Nn \l__mf_n_int { \fp_eval:n { round(\__mf_v:n{RL}/\__mf_v:n{m}) } }
+    % numbering step of the main ruler
+    \__mf_set:nn {num} { \__mf_v:n{m} >= 5 ? \__mf_v:n{m} : 1 }
+    \__mf_set:nn {x0} { \__mf_v:n{s}*(\mf_rk:n{start}) } \__mf_set:nn {x1} { \__mf_v:n{s}*((\mf_rk:n{start})+(\mf_rk:n{length})) }
+  }
+%% tick level of value v (ruler units): 3 = whole unit, 2 = half, 1 = quarter / tenth..., 0 = finest
+\cs_new:Npn \__mf_ticklen:n #1
+  {
+    \fp_eval:n
+      {
+        abs(#1-round(#1)) < 1e-6 ? 0.36 :
+          ( abs(2*(#1)-round(2*(#1))) < 1e-6 ? 0.26 :
+            ( abs(4*(#1)-round(4*(#1))) < 1e-6 && \__mf_metric_p: == 0 ? 0.2 :
+              ( abs(8*(#1)-round(8*(#1))) < 1e-6 && \__mf_metric_p: == 0 ? 0.16 : 0.13 ) ) )
+      }
+  }
+%% the ruler and the object in ruler coordinates (top edge of the ruler at y = 0).  #1 = 1 in the magnifier
+\cs_new_protected:Npn \__mf_ruler_body:n #1
+  {
+    \fill[mfbody!55] (-0.3,-1.05) rectangle (\fp_eval:n{\__mf_v:n{s}*\__mf_v:n{RL}+0.3},0);
+    \draw[line~width=0.8pt, rounded~corners=2pt] (-0.3,-1.05) rectangle (\fp_eval:n{\__mf_v:n{s}*\__mf_v:n{RL}+0.3},0);
+    \int_step_inline:nnn {0} {\l__mf_n_int}
+      {
+        \tl_set:Nx \l_tmpa_tl { \fp_eval:n { ##1*\__mf_v:n{m} } }
+        \tl_set:Nx \l_tmpb_tl { \fp_eval:n { round(\__mf_v:n{s}*\l_tmpa_tl,4) } }
+        \use:e { \exp_not:N \draw[line~width=0.5pt] (\l_tmpb_tl,0) -- ++(0,-\fp_eval:n{ \__mf_v:n{m} >= 1 ? 0.36 : \__mf_ticklen:n{\l_tmpa_tl} }); }
+        \fp_compare:nNnT { abs(\l_tmpa_tl/\__mf_v:n{num} - round(\l_tmpa_tl/\__mf_v:n{num})) } < {1e-6}
+          { \use:e { \exp_not:N \node[font=\exp_not:N\sffamily \int_compare:nNnTF {#1} = 1 {\exp_not:N\large} {\exp_not:N\scriptsize}, anchor=north, inner~sep=1pt]
+              at (\l_tmpb_tl, \int_compare:nNnTF {#1} = 1 {-0.42} {-0.38}) {\fp_eval:n{round(\l_tmpa_tl,3)}}; } }
+      }
+    \int_compare:nNnF {#1} = 1
+      { \node[font=\sffamily\bfseries\tiny, anchor=south~west, inner~sep=1pt] at (-0.25,-1.02) { \int_compare:nNnTF {\__mf_metric_p:} = 1 {cm} {in} }; }
+    \__mf_object:
+  }
+\cs_new_protected:Npn \__mf_object:
+  {
+    \tl_set:Nx \l__mf_xa_tl { \__mf_r:n{\__mf_v:n{x0}} } \tl_set:Nx \l__mf_xb_tl { \__mf_r:n{\__mf_v:n{x1}} }
+    \__mf_set:nn {w} { \__mf_v:n{x1}-\__mf_v:n{x0} }
+    \__mf_set:nn {oh} { \str_case:enF { \mf_rk:n{object} } { {cylinder}{0.62} {cube}{\__mf_v:n{w}} {rock}{min(1.6, 0.5*\__mf_v:n{w})} {marbles}{\__mf_v:n{w}/(\mf_rk:n{marbles})} } {0.62} }
+    \str_case:en { \mf_rk:n{object} }
+      {
+        {cylinder}
+          {
+            \shade[top~color=mfmetal!95, bottom~color=mfmetal!110!black, middle~color=mfbody!40, shading=axis, rounded~corners=1pt]
+              (\l__mf_xa_tl,0) rectangle (\l__mf_xb_tl,0.62);
+            \fill[mfmetal!80] (\l__mf_xa_tl,0.18) rectangle (\l__mf_xb_tl,0.26);
+            \draw[line~width=0.6pt, rounded~corners=1pt] (\l__mf_xa_tl,0) rectangle (\l__mf_xb_tl,0.62);
+          }
+        {cube}
+          {
+            \fill[mfmetal!45] (\l__mf_xa_tl,0) rectangle (\l__mf_xb_tl,\__mf_r:n{\__mf_v:n{w}});
+            \draw[line~width=0.6pt] (\l__mf_xa_tl,0) rectangle (\l__mf_xb_tl,\__mf_r:n{\__mf_v:n{w}});
+          }
+        {rock}
+          {
+            \__mf_set:nn {rh} { min(1.6, 0.5*\__mf_v:n{w}) }
+            \use:e { \exp_not:N \filldraw[fill=mfmetal!70, line~width=0.6pt] plot[smooth~cycle, tension=0.7] coordinates
+              { (\l__mf_xa_tl,\__mf_r:n{0.35*\__mf_v:n{rh}})
+                (\__mf_r:n{\__mf_v:n{x0}+0.18*\__mf_v:n{w}},\__mf_r:n{0.9*\__mf_v:n{rh}})
+                (\__mf_r:n{\__mf_v:n{x0}+0.55*\__mf_v:n{w}},\__mf_r:n{\__mf_v:n{rh}})
+                (\__mf_r:n{\__mf_v:n{x0}+0.9*\__mf_v:n{w}},\__mf_r:n{0.75*\__mf_v:n{rh}})
+                (\l__mf_xb_tl,\__mf_r:n{0.3*\__mf_v:n{rh}})
+                (\__mf_r:n{\__mf_v:n{x0}+0.8*\__mf_v:n{w}},0)
+                (\__mf_r:n{\__mf_v:n{x0}+0.2*\__mf_v:n{w}},0) }; }
+          }
+        {marbles}
+          {
+            \__mf_set:nn {d} { \__mf_v:n{w}/(\mf_rk:n{marbles}) }
+            \int_step_inline:nn { \mf_rk:n{marbles} }
+              {
+                \tl_set:Nx \l_tmpa_tl { \__mf_r:n{\__mf_v:n{x0}+(##1-0.5)*\__mf_v:n{d}} }
+                \shade[ball~color=mfmetal!70] (\l_tmpa_tl,\__mf_r:n{\__mf_v:n{d}/2}) circle[radius=\__mf_r:n{\__mf_v:n{d}/2}];
+                \draw[line~width=0.6pt] (\l_tmpa_tl,\__mf_r:n{\__mf_v:n{d}/2}) circle[radius=\__mf_r:n{\__mf_v:n{d}/2}];
+              }
+          }
+      }
+  }
+\NewDocumentCommand \mfRuler { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/ruler}{#1}
+    \__mf_ruler_setup:
+    \__mf_set:nn {BR} {2.0}
+    \__mf_set:nn {z} { \str_if_eq:eeTF {\mf_rk:n{zoom}} {auto} { max(1.2, \__mf_v:n{BR}/(0.85*\__mf_v:n{s})) } {\mf_rk:n{zoom}} }
+    \__mf_set:nn {BR} {2.0}  % magnifier radius
+    \begin{tikzpicture}[mf, scale=\mf_rk:n{scale}]
+      \__mf_ruler_body:n {0}
+      \int_compare:nNnT { \str_if_eq:eeTF {\mf_rk:n{guides}} {true} {1} {0} } = 1
+        {
+          \draw[mf~dotted, line~width=0.6pt] (\__mf_r:n{\__mf_v:n{x0}},-0.2) -- ++(0,\fp_eval:n{\__mf_v:n{oh}+0.5});
+          \draw[mf~dotted, line~width=0.6pt] (\__mf_r:n{\__mf_v:n{x1}},-0.2) -- ++(0,\fp_eval:n{\__mf_v:n{oh}+0.5});
+        }
+      \str_if_eq:eeT { \mf_rk:n{view} } {magnifier}
+        {
+          \fp_compare:nNnT { abs(\mf_rk:n{start}) } > {1e-6}
+            { \__mf_magnifier:nn { \__mf_v:n{x0} } { \__mf_v:n{x0} - (abs(\__mf_v:n{x1}-\__mf_v:n{x0}) < 2*\__mf_v:n{BR} ? \__mf_v:n{BR}*1.05 : 0) } }
+          \__mf_magnifier:nn { \__mf_v:n{x1} } { \__mf_v:n{x1} + (abs(\mf_rk:n{start}) > 1e-6 && abs(\__mf_v:n{x1}-\__mf_v:n{x0}) < 2*\__mf_v:n{BR} ? \__mf_v:n{BR}*1.05 : 0) }
+        }
+      \__mf_kvblank:nF {ruler/title}
+        { \node[mf~title, anchor=south] at (current~bounding~box.north) {\mftxtlab{\mf_rk:n{title}}}; }
+      \str_if_eq:eeT { \mf_rk:n{answer} } {true}
+        {
+          \int_compare:nNnTF {\__mf_metric_p:} = 1
+            { \tl_set:Nx \l_tmpa_tl { \fp_eval:n { \str_if_eq:eeTF{\mf_rk:n{read}}{mark} { round((\mf_rk:n{length})/\__mf_v:n{m})*\__mf_v:n{m} } { round(\mf_rk:n{length},3) } } \exp_not:n{\,\mathrm{cm}} } }
+            { \__mf_fmt_mixed:n { \str_if_eq:eeTF{\mf_rk:n{read}}{mark} { round((\mf_rk:n{length})/\__mf_v:n{m})*\__mf_v:n{m} } { \mf_rk:n{length} } }
+              \tl_set:Nx \l_tmpa_tl { \exp_not:V \l__mf_fmt_tl \exp_not:n{\,\mathrm{in}} } }
+          \node[anchor=north, font=\sffamily\small] at (current~bounding~box.south) {Answer:~$\l_tmpa_tl$};
+        }
+    \end{tikzpicture}
+    \group_end:
+  }
+%% magnifier on ruler point x = #1 (drawing units), big circle centred above x = #2
+\cs_new_protected:Npn \__mf_magnifier:nn #1#2
+  {
+    \__mf_set:nn {mx} {#1} \__mf_set:nn {cx} {#2}
+    \__mf_set:nn {cy} { 1.2 + \__mf_v:n{BR} + (\str_if_eq:eeTF{\mf_rk:n{object}}{cube} {\__mf_v:n{w}} {\__mf_v:n{oh}}) }
+    \__mf_set:nn {sr} { \__mf_v:n{BR}/\__mf_v:n{z} }
+    % connector lines and the small circle on the ruler
+    \draw[line~width=0.4pt, dash~pattern=on~2pt~off~2pt, color=mfgrid]
+      (\__mf_r:n{\__mf_v:n{mx}-\__mf_v:n{sr}},0) -- (\__mf_r:n{\__mf_v:n{cx}-\__mf_v:n{BR}},\__mf_v:n{cy})
+      (\__mf_r:n{\__mf_v:n{mx}+\__mf_v:n{sr}},0) -- (\__mf_r:n{\__mf_v:n{cx}+\__mf_v:n{BR}},\__mf_v:n{cy});
+    \draw[line~width=0.5pt, color=mfgrid] (\__mf_r:n{\__mf_v:n{mx}},0) circle[radius=\__mf_r:n{\__mf_v:n{sr}}];
+    \begin{scope}
+      \fill[white] (\__mf_v:n{cx},\__mf_v:n{cy}) circle[radius=\__mf_v:n{BR}];
+      \clip (\__mf_v:n{cx},\__mf_v:n{cy}) circle[radius=\__mf_v:n{BR}];
+      \begin{scope}[shift={(\__mf_r:n{\__mf_v:n{cx}-\__mf_v:n{z}*\__mf_v:n{mx}},\__mf_r:n{\__mf_v:n{cy}+0.6})}, scale=\__mf_v:n{z}]
+        \__mf_ruler_body:n {1}
+      \end{scope}
+    \end{scope}
+    \draw[line~width=1pt] (\__mf_v:n{cx},\__mf_v:n{cy}) circle[radius=\__mf_v:n{BR}];
+  }
+%% mixed number for inches (to 1/16)
+\cs_new_protected:Npn \__mf_fmt_mixed:n #1
+  {
+    \int_set:Nn \l__mf_i_int { \fp_eval:n { round((#1)*16) } }
+    \int_set:Nn \l__mf_j_int { \int_div_truncate:nn {\l__mf_i_int} {16} }
+    \int_set:Nn \l__mf_k_int { \int_mod:nn {\l__mf_i_int} {16} }
+    \int_compare:nNnTF {\l__mf_k_int} = 0
+      { \tl_set:Nx \l__mf_fmt_tl { \int_use:N \l__mf_j_int } }
+      {
+        \int_set:Nn \l__mf_a_int {16}
+        \bool_until_do:nn { \int_compare_p:nNn { \int_mod:nn {\l__mf_k_int} {2} } = 1 } { \int_set:Nn \l__mf_k_int {\l__mf_k_int/2} \int_set:Nn \l__mf_a_int {\l__mf_a_int/2} }
+        \tl_set:Nx \l__mf_fmt_tl { \int_compare:nNnF {\l__mf_j_int} = 0 { \int_use:N \l__mf_j_int } \exp_not:N \tfrac {\int_use:N\l__mf_k_int} {\int_use:N\l__mf_a_int} }
+      }
+  }
+\ExplSyntaxOff

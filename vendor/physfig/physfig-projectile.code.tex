@@ -1,0 +1,70 @@
+%% ===================================================== projectile motion
+%% \pfProjectile[launch=ground|cliff, angle=45, positions=6, letters, velocity, components, gravity, ...]
+\newif\ifpf@pr@am \newif\ifpf@pr@path \newif\ifpf@pr@v \newif\ifpf@pr@c \newif\ifpf@pr@g
+\newif\ifpf@pr@H \newif\ifpf@pr@R \newif\ifpf@pr@h \newif\ifpf@pr@let
+\pgfqkeys{/pf/projectile}{
+  launch/.initial=ground, cliff height/.initial=3,
+  angle/.initial=45, angle mark/.is if=pf@pr@am, angle label/.initial=\theta,
+  object/.initial=ball, size/.initial=0.6,
+  path/.is if=pf@pr@path, positions/.initial=0, letters/.is if=pf@pr@let,
+  velocity/.is if=pf@pr@v, velocity label/.initial=v_0,
+  components/.is if=pf@pr@c, x label/.initial=v_{0x}, y label/.initial=v_{0y},
+  gravity/.is if=pf@pr@g, gravity label/.initial=g,
+  height mark/.is if=pf@pr@H, height label/.initial=H,
+  range mark/.is if=pf@pr@R, range label/.initial=R,
+  cliff mark/.is if=pf@pr@h, cliff label/.initial=h,
+  width/.initial=11, max height/.initial=5.5,
+  mirror/.is if=pf@mirror, color/.is if=pf@color, scale/.initial=1,
+}
+\def\pf@prk#1{\pgfkeysvalueof{/pf/projectile/#1}}
+\newcommand\pfProjectile[1][]{%
+  \begingroup\pgfqkeys{/pf/projectile}{angle mark=true, path=true, velocity=true, #1}%
+  \edef\pf@a{\pf@prk{angle}}\edef\pf@c{\fpeval{cosd(\pf@a)}}\edef\pf@s{\fpeval{sind(\pf@a)}}%
+  \edef\pf@W{\pf@prk{width}}\edef\pf@Hm{\pf@prk{max height}}%
+  \pf@ifstr{\pf@prk{launch}}{cliff}{\edef\pf@Hc{\pf@prk{cliff height}}}{\def\pf@Hc{0}}%
+  % solve for the drawing scale k (cm per unit, with v=1, g=1)
+  \def\pf@k{10}%
+  \foreach \pf@i in {1,...,40}{%
+    \xdef\pf@kg{\fpeval{\pf@W/(\pf@c*(\pf@s+sqrt((\pf@s)^2+2*\pf@Hc/\pf@k))+0.000001)}}%
+    \xdef\pf@kg{\fpeval{min(\pf@kg,(\pf@Hm-\pf@Hc)/(max(\pf@s,0)^2/2+0.000001))}}%
+    \global\let\pf@k\pf@kg}%
+  \edef\pf@yz{\fpeval{\pf@Hc/\pf@k}}% launch height (units)
+  \edef\pf@T{\fpeval{\pf@s+sqrt((\pf@s)^2+2*\pf@yz)}}% flight time
+  \edef\pf@r{\fpeval{\pf@ifstr{\pf@prk{object}}{dot}{0.07}{0.45*\pf@prk{size}}}}%
+  \edef\pf@R{\fpeval{\pf@k*\pf@c*\pf@T}}% range in cm
+  \edef\pf@ta{\fpeval{max(\pf@s,0)}}\edef\pf@xa{\fpeval{\pf@k*\pf@c*\pf@ta}}\edef\pf@ya{\fpeval{\pf@k*(\pf@yz+\pf@s*\pf@ta-(\pf@ta)^2/2)}}%
+  \begin{tikzpicture}[pf, scale=\pf@prk{scale}]
+  \begin{scope}[xscale=\ifpf@mirror -1\else 1\fi]
+  % ground and cliff
+  \draw[line width=1.1pt] (\pf@ifstr{\pf@prk{launch}}{cliff}{-1.6}{-0.8},0) -- (\pf@R+0.9,0);
+  \pf@ifstr{\pf@prk{launch}}{cliff}{\filldraw[fill=pframp, line width=1.1pt] (-1.4,0) rectangle (0,\pf@Hc);}{}%
+  % path
+  \ifpf@pr@path\draw[line width=1pt, dash pattern=on 4pt off 3pt, \ifpf@color pfblue\fi] plot[domain=0:\pf@T, samples=60, smooth]
+     ({\pf@k*\pf@c*\x},{\pf@k*(\pf@yz+\pf@s*\x-\x*\x/2)+\pf@r});\fi
+  % balls at equal time steps (or just the launch position)
+  \edef\pf@n{\pf@prk{positions}}%
+  \ifnum\pf@n>0 \foreach \pf@i in {0,...,\pf@n}{%
+      \edef\pf@t{\fpeval{\pf@i*\pf@T/\pf@n}}%
+      \edef\pf@bx{\fpeval{\pf@k*\pf@c*\pf@t}}\edef\pf@by{\fpeval{\pf@k*(\pf@yz+\pf@s*\pf@t-(\pf@t)^2/2)+\pf@r}}%
+      \filldraw[fill=pfbody, line width=1pt] (\pf@bx,\pf@by) circle[radius=\pf@r];
+      \ifpf@pr@let\node[anchor=\pf@manc{135}, inner sep=1pt] at ($(\pf@bx,\pf@by)+(135:\pf@r+0.05)$) {\symbol{\numexpr 65+\pf@i}};\fi}%
+  \else\filldraw[fill=pfbody, line width=1pt] (0,\pf@Hc+\pf@r) circle[radius=\pf@r];\fi
+  \coordinate (L) at (0,\pf@Hc+\pf@r);
+  % angle
+  \ifpf@pr@am\pf@ifnolab{\pf@prk{angle label}}{}{%
+    \draw[line width=0.5pt, dash pattern=on 2pt off 2pt] (L) -- ++(1.3,0);
+    \draw[line width=0.7pt] ($(L)+(0.85,0)$) arc[start angle=0, end angle=\pf@a, radius=0.85];
+    \node[anchor=\pf@manc{0}, inner sep=1pt] at ($(L)+({\pf@a/2}:0.98)$) {\pf@lab{\pf@prk{angle label}}};}\fi
+  % launch velocity and components
+  \ifpf@pr@v\draw[pf motion, \ifpf@color pfred\fi] ($(L)+(\pf@a:\pf@r)$) -- ++(\pf@a:1.4) node[pos=1, anchor=\pf@manc{\pf@a+60}, inner sep=1pt]{\pf@lab{\pf@prk{velocity label}}};\fi
+  \ifpf@pr@c\draw[pf thin arrow, dash pattern=on 2pt off 1.5pt] (L) -- ++({1.6*\pf@c},0) node[pos=1, anchor=\pf@manc{-30}, inner sep=1pt]{\pf@lab{\pf@prk{x label}}};
+    \draw[pf thin arrow, dash pattern=on 2pt off 1.5pt] (L) -- ++(0,{1.6*\pf@s}) node[pos=1, anchor=\pf@manc{180}, inner sep=1pt]{\pf@lab{\pf@prk{y label}}};\fi
+  % gravity
+  \ifpf@pr@g\draw[pf motion, \ifpf@color pfgreen\fi] (\pf@xa+1.3,\pf@ya-0.3) -- ++(0,-0.9) node[pos=1, anchor=\pf@manc{-20}, inner sep=2pt]{\pf@lab{\pf@prk{gravity label}}};\fi
+  % marks
+  \ifpf@pr@H\pf@dimline{\pf@xa,\pf@Hc}{\pf@xa,\pf@ya}{0}{\pf@lab{\pf@prk{height label}}}\fi
+  \ifpf@pr@R\pf@dimline{0,-0.45}{\pf@R,-0.45}{-90}{\pf@lab{\pf@prk{range label}}}%
+     \draw[line width=0.4pt] (0,0) -- (0,-0.6) (\pf@R,0) -- (\pf@R,-0.6);\fi
+  \ifpf@pr@h\pf@ifstr{\pf@prk{launch}}{cliff}{\pf@dimline{-1.9,0}{-1.9,\pf@Hc}{180}{\pf@lab{\pf@prk{cliff label}}}}{}\fi
+  \end{scope}
+  \end{tikzpicture}\endgroup}

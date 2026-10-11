@@ -1,0 +1,23 @@
+name = "math-practice"
+main = "worker/src/index.js"
+compatibility_date = "2025-04-01"
+
+# Free plan: Workers KV only.
+# Do not add an R2 bucket. Creating one asks for a payment method.
+
+[[kv_namespaces]]
+binding = "SHEETS"
+id = "00000000000000000000000000000001"
+
+[[kv_namespaces]]
+binding = "SUBMISSIONS"
+id = "00000000000000000000000000000002"
+
+[[kv_namespaces]]
+binding = "PROFILE"
+id = "00000000000000000000000000000003"
+
+[vars]
+# Browser origin of the GitHub Pages site (no path). The quiz is served at
+# https://khkreddy.github.io/Math-practice/ and the origin is the host below.
+PAGES_ORIGIN = "https://khkreddy.github.io"

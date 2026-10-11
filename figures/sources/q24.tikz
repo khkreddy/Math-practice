@@ -1,0 +1,40 @@
+% Practice Sheet 1, question 24.
+% Two horizontal lines EF (through O and Q) and GH (through P and R).
+% Transversal AB rises to the right through P and O.
+% Vertical line CD through Q and R, with right-angle squares in the
+% north-east corner at Q and at R.
+%
+% Styles mf / mf arrows / mf thin come from vendor/mathfig (original library).
+% \mfParallelLines is not used: that macro names the lines, draws angle arcs,
+% and adds parallel tick marks. None of those are on the photographed paper.
+\begin{tikzpicture}[mf, every node/.append style={fill=white, inner sep=1.5pt, font=\normalsize}]
+  \draw[mf arrows] (-0.55,2.45) -- (8.15,2.45);
+  \draw[mf arrows] (-0.55,0) -- (8.15,0);
+  \node[anchor=east, xshift=-3pt] at (-0.55,2.45) {$E$};
+  \node[anchor=west, xshift=3pt] at (8.15,2.45) {$F$};
+  \node[anchor=east, xshift=-3pt] at (-0.55,0) {$G$};
+  \node[anchor=west, xshift=3pt] at (8.15,0) {$H$};
+
+  \coordinate (B) at (1.30,-1.55);
+  \coordinate (P) at (2.17,0);
+  \coordinate (O) at (3.52,2.45);
+  \coordinate (A) at (4.50,4.20);
+  \draw[mf arrows] (B) -- (A);
+  \node[anchor=south east, xshift=-1pt, yshift=1pt] at (O) {$O$};
+  \node[anchor=north west, xshift=2pt, yshift=-1pt] at (P) {$P$};
+  \node[anchor=south west, xshift=2pt, yshift=1pt] at (A) {$A$};
+  \node[anchor=north east, xshift=-1pt] at (B) {$B$};
+
+  \coordinate (C) at (6.20,4.20);
+  \coordinate (Q) at (6.20,2.45);
+  \coordinate (R) at (6.20,0);
+  \coordinate (D) at (6.20,-1.55);
+  \draw[mf arrows] (C) -- (D);
+  \node[anchor=south east, xshift=-3pt, yshift=1pt] at (Q) {$Q$};
+  \node[anchor=south east, xshift=-3pt, yshift=2pt] at (R) {$R$};
+  \node[anchor=south, yshift=3pt] at (C) {$C$};
+  \node[anchor=north, yshift=-3pt] at (D) {$D$};
+
+  \draw[mf thin] (Q) ++(0,0.32) -| ++(0.32,-0.32);
+  \draw[mf thin] (R) ++(0,0.32) -| ++(0.32,-0.32);
+\end{tikzpicture}

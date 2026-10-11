@@ -1,0 +1,3 @@
+# Copy to .dev.vars (gitignored) before `npx wrangler dev`.
+# Use a long random value. This file is only an example.
+ADMIN_TOKEN=replace-with-a-long-random-string

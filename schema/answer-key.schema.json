@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/khkreddy/Math-practice/schema/answer-key.schema.json",
+  "title": "Answer key",
+  "description": "Stored by PUT /admin/sheet/:id and never returned by GET /sheet/:id. Keep the filled key out of this public repository. Hinge ids, if used, belong here unless they are confirmed harmless to publish.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sheet_id", "questions"],
+  "properties": {
+    "sheet_id": { "type": "string" },
+    "questions": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/node" }
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accept": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Accepted responses. Compared after the scorer's normalization, or as choice ids."
+        },
+        "match": {
+          "enum": ["text", "choice", "number", "set", "token"],
+          "description": "token: every word of an accept value appears in the response. Useful for angle names such as CQF inside 'angle CQF'."
+        },
+        "kind": { "const": "photo" },
+        "rubric": { "type": "string", "description": "How a person or a vision check should mark a photo." },
+        "wrong": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Normalized wrong response -> misconception id. Ids only."
+        },
+        "hinges": { "type": "array", "items": { "type": "string" } },
+        "parts": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/node" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,77 @@
+% Original code written for Hari's teaching use; option set modelled on mathfigures.com (teacher.dev). No site code used.
+%% mathfig.sty -- parameterised school-maths figures (TikZ), one macro per figure type.
+%% Original implementation written for Hari's teaching use.  The *set of options* was taken
+%% from the user-facing controls of mathfigures.com (teacher.dev), used as a feature list only;
+%% no code of that site is used.  Figure ideas based on mathfigures.com (teacher.dev), Apache License 2.0.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{mathfig}[2026/10/11 v1.0 parameterised math figures]
+\RequirePackage{tikz}
+\RequirePackage{amsmath}
+\RequirePackage{xfp}
+\usetikzlibrary{arrows.meta,calc}
+%% ---------------------------------------------------------------- colours and styles
+\definecolor{mfink}{HTML}{111827}
+\definecolor{mfgrid}{HTML}{9CA3AF}
+\definecolor{mfminor}{HTML}{D1D5DB}
+\definecolor{mfbody}{HTML}{E5E7EB}
+\definecolor{mfblue}{HTML}{2563EB}
+\definecolor{mfred}{HTML}{DC2626}
+\definecolor{mfgreen}{HTML}{16A34A}
+\definecolor{mforange}{HTML}{EA580C}
+\definecolor{mfpurple}{HTML}{7C3AED}
+\definecolor{mfmetal}{HTML}{9CA3AF}
+\tikzset{
+  mf/.style={color=mfink, line width=1.1pt, line join=round, line cap=round, every node/.style={inner sep=1.5pt}},
+  mf thin/.style={line width=0.6pt},
+  mf hidden/.style={line width=0.8pt, dash pattern=on 3pt off 2.5pt},
+  mf dashed/.style={line width=0.8pt, dash pattern=on 4pt off 3pt},
+  mf dotted/.style={line width=0.9pt, dash pattern=on 0.8pt off 2.2pt},
+  mf halo/.style={fill=white, inner sep=1pt, rounded corners=1pt},
+  mf arrow/.style={-{Triangle[length=7pt,width=6pt]}},
+  mf arrows/.style={{Triangle[length=7pt,width=6pt]}-{Triangle[length=7pt,width=6pt]}},
+  mf barb/.style={-{Straight Barb[length=3.5pt,width=7pt]}},
+}
+\newcommand\mathfigset[1]{\pgfqkeys{/mf/all}{#1}}
+\pgfqkeys{/mf/all}{labels/.initial=medium}
+\ExplSyntaxOn
+%% ---------------------------------------------------------------- label helpers
+%% label convention:  {} = no label,  ? = blank line for students,  otherwise math text
+\cs_new_protected:Npn \mf_blank: { \rule[-0.2ex]{1.6em}{0.5pt} }
+\cs_new_protected:Npn \mf_lab:n #1
+  { \tl_if_blank:nF {#1} { \str_if_eq:eeTF {\tl_to_str:n{#1}} {?} { \mf_blank: } { \ensuremath{#1} } } }
+\cs_new_protected:Npn \mf_txtlab:n #1 % text (not math) label, e.g. titles
+  { \tl_if_blank:nF {#1} { \str_if_eq:eeTF {\tl_to_str:n{#1}} {?} { \mf_blank: } { #1 } } }
+\cs_new:Npn \mf_if_nolab:nTF #1#2#3 { \tl_if_blank:nTF {#1} {#2} {#3} }
+\NewDocumentCommand \mflab {m} { \exp_args:Ne \mf_lab:n { \text_expand:n {#1} } }
+\NewDocumentCommand \mftxtlab {m} { \exp_args:Ne \mf_txtlab:n { \text_expand:n {#1} } }
+%% number formatting: round to \l_mf_round_int decimals, no trailing zeros, minus sign as math minus
+\int_new:N \l_mf_round_int \int_set:Nn \l_mf_round_int {1}
+\cs_new:Npn \mf_num:n #1 { \fp_eval:n { round(#1, \l_mf_round_int) } }
+\cs_new_protected:Npn \mf_measure:nn #1#2 % #1 number, #2 unit -> label text (math)
+  { \mf_num:n {#1} \tl_if_blank:nF {#2} { \ \mathrm{#2} } }
+%% font size for labels
+\cs_new_protected:Npn \mf_font:
+  { \str_case:enF { \pgfkeysvalueof{/mf/all/labels} } { {large}{\large} {medium}{\normalsize} {small}{\small} } {\normalsize} }
+\cs_generate_variant:Nn \str_case:nnF {e}
+\cs_generate_variant:Nn \str_if_eq:nnTF {ee}
+%% resolve a measure label:  auto -> measure if given else none;  measure -> always;  text/?/{}
+%% #1 key value, #2 given (0/1), #3 measure text;  result left in \l_mf_lab_tl
+\tl_new:N \l_mf_lab_tl
+\cs_new_protected:Npn \mf_resolve:nnn #1#2#3
+  {
+    \str_case:enF {\tl_to_str:n{#1}}
+      {
+        {auto}    { \int_compare:nNnTF {#2} = {1} { \tl_set:Nn \l_mf_lab_tl {#3} } { \tl_clear:N \l_mf_lab_tl } }
+        {measure} { \tl_set:Nn \l_mf_lab_tl {#3} }
+        {none}    { \tl_clear:N \l_mf_lab_tl }
+      }
+      { \tl_set:Nn \l_mf_lab_tl {#1} }
+  }
+\cs_generate_variant:Nn \mf_resolve:nnn {ooo,eeo,een,oen,ooe,eee}
+\ExplSyntaxOff
+\input{mathfig-polygons.code.tex}
+\input{mathfig-lines.code.tex}
+\input{mathfig-solids.code.tex}
+\input{mathfig-graphs.code.tex}
+\input{mathfig-ruler.code.tex}
+\endinput

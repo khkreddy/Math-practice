@@ -1,0 +1,25 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: python3 -m unittest discover -s tests -v
+      - name: No private material in the tree
+        run: |
+          if grep -R -n -E 'iisc@gmail|student_response|TTwin-final|page3\.jpeg' \
+            --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github . ; then
+            echo "private material matched" >&2
+            exit 1
+          fi

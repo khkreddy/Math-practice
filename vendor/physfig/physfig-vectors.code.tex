@@ -1,0 +1,82 @@
+%% ===================================================== vector diagram
+%% \pfVectors[vector={mag=4,dir=0,label=A}, vector={mag=3,dir=90,label=B}, resultant=dashed]
+\newif\ifpf@v@grid \newif\ifpf@v@axes \newif\ifpf@v@rang \newif\ifpf@v@rcomp
+\pgfqkeys{/pf/vectors}{
+  vector/.code={\pf@append\pf@v@list{#1}},
+  vectors/.code={\foreach \pf@a/\pf@b/\pf@t in {#1}{\xdef\pf@tmp{mag=\pf@a,dir=\pf@b,label={\unexpanded\expandafter{\pf@t}}}%
+      \expandafter\pf@append\expandafter\pf@v@listg\expandafter{\pf@tmp}\global\let\pf@v@listg\pf@v@listg}\let\pf@v@list\pf@v@listg},
+  resultant/.initial=dashed,          % drawn | dashed | off | none
+  resultant label/.initial=R,
+  resultant angle/.is if=pf@v@rang, resultant angle label/.initial=\theta,
+  resultant components/.is if=pf@v@rcomp,
+  grid/.is if=pf@v@grid, axes/.is if=pf@v@axes,
+  unit/.initial=0.5,                  % cm per grid square (= magnitude 1)
+  mirror/.is if=pf@mirror, color/.is if=pf@color, scale/.initial=1,
+  grid/.default=true, axes/.default=true,
+}
+\pgfqkeys{/pf/vector}{mag/.initial=1, dir/.initial=0, label/.initial=, style/.initial=drawn,
+  components/.initial=false, angle mark/.initial=false, angle label/.initial=\theta,
+  x label/.initial=auto, y label/.initial=auto, components/.default=true, angle mark/.default=true}
+\tikzset{pf vec/.style={line width=1.5pt, -{Triangle[length=8pt,width=6.5pt]}},
+  pf vec drawn/.style={}, pf vec dashed/.style={dash pattern=on 5pt off 3pt},
+  pf comp/.style={line width=1pt, dash pattern=on 3pt off 2pt, -{Triangle[length=6pt,width=5pt]}}}
+% components + angle mark helper  #1 x0 #2 y0 #3 mag(cm) #4 dir #5 colour #6 angle-mark? #7 angle label #8 xlabel #9 ylabel
+\newcommand\pf@v@extras[9]{%
+  \edef\pf@ex{\fpeval{#1+(#3)*cosd(#4)}}\edef\pf@ey{\fpeval{#2+(#3)*sind(#4)}}%
+  \pf@ifstr{#6}{comp}{%
+    \draw[pf comp, #5] (#1,#2) -- (\pf@ex,#2) node[pos=0.5, anchor=\fpeval{sind(#4)>=0?90:270}]{\pf@lab{#8}};
+    \draw[pf comp, #5] (\pf@ex,#2) -- (\pf@ex,\pf@ey) node[pos=0.5, anchor=\fpeval{cosd(#4)>=0?180:0}]{\pf@lab{#9}};}{}%
+  \pf@ifstr{#6}{angle}{%
+    \edef\pf@r{\fpeval{min(1.0,0.4*(#3))}}%
+    \draw[line width=0.5pt, dash pattern=on 2pt off 2pt] (#1,#2) -- ++(\pf@r+0.4,0);
+    \draw[line width=0.7pt] ($(#1,#2)+(\pf@r,0)$) arc[start angle=0, end angle=#4, radius=\pf@r];
+    \node at ($(#1,#2)+({#4/2}:\pf@r+0.3)$) {\pf@lab{#7}};}{}}
+\newcommand\pfVectors[1][]{%
+  \begingroup\let\pf@v@list\relax\global\let\pf@v@listg\relax
+  \pgfqkeys{/pf/vectors}{grid=true,#1}%
+  \ifx\pf@v@list\relax\pgfqkeys{/pf/vectors}{vectors={4/0/A, 3/90/B}}\fi
+  \edef\pf@u{\pgfkeysvalueof{/pf/vectors/unit}}%
+  % pass 1: extent
+  \def\pf@sx{0}\def\pf@sy{0}\def\pf@n{1}\def\pf@cx{0}\def\pf@cy{0}\def\pf@xmin{0}\def\pf@xmax{0}\def\pf@ymin{0}\def\pf@ymax{0}%
+  \def\pf@item##1{\pgfqkeys{/pf/vector}{mag=1,dir=0,##1}%
+    \edef\pf@d{\pf@mang{\pgfkeysvalueof{/pf/vector/dir}}}%
+    \edef\pf@cx{\fpeval{\pf@cx+\pgfkeysvalueof{/pf/vector/mag}*cosd(\pf@d)}}%
+    \edef\pf@cy{\fpeval{\pf@cy+\pgfkeysvalueof{/pf/vector/mag}*sind(\pf@d)}}%
+    \edef\pf@sx{\fpeval{\pf@sx+\pf@cx}}\edef\pf@sy{\fpeval{\pf@sy+\pf@cy}}\edef\pf@n{\fpeval{\pf@n+1}}%
+    \edef\pf@xmin{\fpeval{min(\pf@xmin,\pf@cx)}}\edef\pf@xmax{\fpeval{max(\pf@xmax,\pf@cx)}}%
+    \edef\pf@ymin{\fpeval{min(\pf@ymin,\pf@cy)}}\edef\pf@ymax{\fpeval{max(\pf@ymax,\pf@cy)}}}%
+  \pf@v@list
+  \edef\pf@rx{\pf@cx}\edef\pf@ry{\pf@cy}%
+  \edef\pf@gcx{\fpeval{\pf@sx/\pf@n}}\edef\pf@gcy{\fpeval{\pf@sy/\pf@n}}% centroid of the polygon
+  \ifpf@v@axes\edef\pf@gcx{\fpeval{\pf@gcx+0.3*(\pf@xmax-\pf@xmin)}}\edef\pf@gcy{\fpeval{\pf@gcy+0.3}}\fi
+  \edef\pf@gxa{\fpeval{floor(\pf@xmin)-1}}\edef\pf@gxb{\fpeval{ceil(\pf@xmax)+1}}%
+  \edef\pf@gya{\fpeval{floor(\pf@ymin)-1}}\edef\pf@gyb{\fpeval{ceil(\pf@ymax)+1}}%
+  \begin{tikzpicture}[pf, x=\pf@u cm, y=\pf@u cm, scale=\pgfkeysvalueof{/pf/vectors/scale}]
+  \ifpf@v@grid\draw[pfgrid!60, line width=0.4pt] (\pf@gxa,\pf@gya) grid (\pf@gxb,\pf@gyb);\fi
+  \ifpf@v@axes\draw[line width=0.8pt, -{Stealth[length=6pt]}] (\pf@gxa,0) -- (\pf@gxb+0.6,0) node[right]{$x$};
+    \draw[line width=0.8pt, -{Stealth[length=6pt]}] (0,\pf@gya) -- (0,\pf@gyb+0.6) node[above]{$y$};\fi
+  % pass 2: draw head to tail
+  \def\pf@cx{0}\def\pf@cy{0}\count@=0
+  \def\pf@item##1{\advance\count@ 1
+    \pgfqkeys{/pf/vector}{mag=1,dir=0,label=,style=drawn,components=false,angle mark=false,angle label=\theta,x label=auto,y label=auto,##1}%
+    \edef\pf@d{\pf@mang{\pgfkeysvalueof{/pf/vector/dir}}}\edef\pf@m{\pgfkeysvalueof{/pf/vector/mag}}%
+    \edef\pf@nx{\fpeval{\pf@cx+\pf@m*cosd(\pf@d)}}\edef\pf@ny{\fpeval{\pf@cy+\pf@m*sind(\pf@d)}}%
+    \edef\pf@col{\pf@palette{\the\count@}}\edef\pf@sty{\pgfkeysvalueof{/pf/vector/style}}%
+    \pf@ifstr{\pf@sty}{off}{}{%
+      \draw[pf vec, pf vec \pf@sty, \pf@col] (\pf@cx,\pf@cy) -- (\pf@nx,\pf@ny)
+        node[pos=0.5, anchor=\fpeval{\pf@d+(((\pf@nx-\pf@cx)*(\pf@gcy-\pf@cy)-(\pf@ny-\pf@cy)*(\pf@gcx-\pf@cx))>0?90:-90)}, inner sep=5pt, text=\pf@col]{\pf@lab{\pgfkeysvalueof{/pf/vector/label}}};}%
+    \pf@ifstr{\pgfkeysvalueof{/pf/vector/components}}{true}{\edef\pf@xl{\pgfkeysvalueof{/pf/vector/x label}}\edef\pf@yl{\pgfkeysvalueof{/pf/vector/y label}}%
+      \pf@ifstr{\pf@xl}{auto}{\def\pf@xl{\pf@sub{\pgfkeysvalueof{/pf/vector/label}}{x}}}{}\pf@ifstr{\pf@yl}{auto}{\def\pf@yl{\pf@sub{\pgfkeysvalueof{/pf/vector/label}}{y}}}{}%
+      \pf@v@extras{\pf@cx}{\pf@cy}{\pf@m}{\pf@d}{\pf@col!60!white}{comp}{}{\pf@xl}{\pf@yl}}{}%
+    \pf@ifstr{\pgfkeysvalueof{/pf/vector/angle mark}}{true}{\pf@v@extras{\pf@cx}{\pf@cy}{\pf@m}{\pf@d}{\pf@col}{angle}{\pgfkeysvalueof{/pf/vector/angle label}}{}{}}{}%
+    \let\pf@cx\pf@nx\let\pf@cy\pf@ny}%
+  \pf@v@list
+  % resultant
+  \edef\pf@rs{\pgfkeysvalueof{/pf/vectors/resultant}}%
+  \edef\pf@rm{\fpeval{sqrt((\pf@rx)^2+(\pf@ry)^2)}}\edef\pf@rd{\fpeval{\pf@rm>0?atand(\pf@ry,\pf@rx):0}}%
+  \pf@ifstr{\pf@rs}{none}{}{\pf@ifstr{\pf@rs}{off}{}{%
+    \draw[pf vec, pf vec \pf@rs, \ifpf@color pfred\fi] (0,0) -- (\pf@rx,\pf@ry)
+      node[pos=0.5, anchor=\fpeval{\pf@rd+((\pf@rx*\pf@gcy-\pf@ry*\pf@gcx)>0?90:-90)}, inner sep=5pt]{\pf@lab{\pgfkeysvalueof{/pf/vectors/resultant label}}};}%
+    \ifpf@v@rcomp\pf@v@extras{0}{0}{\pf@rm}{\pf@rd}{\ifpf@color pfred\else pfink\fi}{comp}{}{}{}\fi
+    \ifpf@v@rang\pf@v@extras{0}{0}{\pf@rm}{\pf@rd}{pfink}{angle}{\pgfkeysvalueof{/pf/vectors/resultant angle label}}{}{}\fi}%
+  \end{tikzpicture}\endgroup}

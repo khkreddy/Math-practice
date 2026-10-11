@@ -1,0 +1,103 @@
+%% ===================================================== spring scale (newton meter)
+%% \pfSpringScale[capacity=10, units=newtons|grams|both, reading=3.47, zero=0, hook=block, show=both, ...]
+\newif\ifpf@ss@col \newif\ifpf@ss@key \newif\ifpf@ss@unl
+\pgfqkeys{/pf/spring}{
+  capacity/.initial=10, units/.initial=newtons, colored/.is if=pf@ss@col,
+  reading/.initial=3.47, zero/.initial=0,
+  hook/.initial=block, masses/.initial=4, block label/.initial=,
+  show/.initial=both,                 % both | magnifier | instrument
+  magnifier marks/.initial=2,         % numbered marks visible in the magnifier (1..6)
+  title/.initial=, answer key/.is if=pf@ss@key, unloaded/.is if=pf@ss@unl,
+  length/.initial=7, color/.is if=pf@color, scale/.initial=1,
+}
+\def\pf@sk#1{\pgfkeysvalueof{/pf/spring/#1}}
+\definecolor{pfss1}{HTML}{F9C6D3}\definecolor{pfss2.5}{HTML}{FBD5A5}\definecolor{pfss5}{HTML}{BFE3C0}
+\definecolor{pfss10}{HTML}{D2A878}\definecolor{pfss20}{HTML}{BBD3F2}\definecolor{pfss30}{HTML}{D9C6EE}\definecolor{pfss50}{HTML}{E8B4B4}
+\definecolor{pfssface}{HTML}{F5F0E8}
+% numbered step and minor step for a capacity
+\newcommand\pf@ss@steps[1]{%
+  \pf@ifstr{#1}{1}{\def\pf@maj{0.1}\def\pf@min{0.02}}{%
+  \pf@ifstr{#1}{2.5}{\def\pf@maj{0.5}\def\pf@min{0.05}}{%
+  \pf@ifstr{#1}{5}{\def\pf@maj{0.5}\def\pf@min{0.1}}{%
+  \pf@ifstr{#1}{20}{\def\pf@maj{2}\def\pf@min{0.5}}{%
+  \pf@ifstr{#1}{30}{\def\pf@maj{5}\def\pf@min{1}}{%
+  \pf@ifstr{#1}{50}{\def\pf@maj{5}\def\pf@min{1}}{\def\pf@maj{1}\def\pf@min{0.2}}}}}}}}
+% the scale face, tube, spring and pointer: zero at (0,0), y downwards. #1 = pointer force
+\newcommand\pf@ss@face[1]{%
+  \edef\pf@cap{\pf@sk{capacity}}\pf@ss@steps{\pf@cap}\edef\pf@Ls{\pf@sk{length}}%
+  \edef\pf@ppos{\fpeval{-(#1)/\pf@cap*\pf@Ls}}%
+  % tube
+  \filldraw[fill=white, line width=0.6pt] (-0.12,0.6) rectangle (0.12,-\pf@Ls-0.15);
+  % spring (zig-zag) from top to pointer
+  \draw[line width=0.5pt, decorate, decoration={zigzag, segment length=\fpeval{max(0.06,(0.6-\pf@ppos)/18)}cm, amplitude=0.08cm}] (0,0.58) -- (0,\pf@ppos+0.06);
+  \draw[line width=0.6pt] (0,\pf@ppos) -- (0,-\pf@Ls-0.15);
+  % ticks
+  \edef\pf@nmin{\fpeval{round(\pf@cap/\pf@min)}}\edef\pf@permaj{\fpeval{round(\pf@maj/\pf@min)}}%
+  \edef\pf@both{\pf@ifstr{\pf@sk{units}}{both}{1}{0}}%
+  \foreach \pf@k in {0,...,\pf@nmin}{%
+    \edef\pf@F{\fpeval{\pf@k*\pf@min}}\edef\pf@yk{\fpeval{-\pf@F/\pf@cap*\pf@Ls}}%
+    \edef\pf@isM{\fpeval{\pf@k-\pf@permaj*trunc(\pf@k/\pf@permaj+0.0001)==0?1:0}}%
+    \edef\pf@isH{\fpeval{(2*\pf@k-\pf@permaj*trunc(2*\pf@k/\pf@permaj+0.0001)==0)?1:0}}%
+    \edef\pf@tl{\fpeval{\pf@isM==1?0.32:(\pf@isH==1?0.24:0.16)}}%
+    \edef\pf@lw{\ifnum\pf@isM=1 0.8pt\else 0.5pt\fi}%
+    \draw[line width=\pf@lw] (-0.14,\pf@yk) -- ++(-\pf@tl,0);
+    \ifnum\pf@both=1 \draw[line width=\pf@lw] (0.14,\pf@yk) -- ++(\pf@tl,0);\fi
+    \ifnum\pf@isM=1
+      \pf@ifstr{\pf@sk{units}}{grams}{\node[font=\scriptsize, anchor=east] at (-0.5,\pf@yk) {\pgfmathprintnumber{\fpeval{round(\pf@F*100,2)}}};}{%
+        \node[font=\scriptsize, anchor=east] at (-0.5,\pf@yk) {\pgfmathprintnumber{\pf@F}};}%
+      \ifnum\pf@both=1 \node[font=\scriptsize, anchor=west] at (0.5,\pf@yk) {\pgfmathprintnumber{\fpeval{round(\pf@F*100,2)}}};\fi
+    \fi}
+  % pointer
+  \filldraw[fill=\ifpf@color pfss10\else pfgrid!60\fi, line width=0.5pt] (-0.13,\pf@ppos) rectangle (0.13,\pf@ppos-0.22);
+  \draw[pfred, line width=0.9pt] (-0.55,\pf@ppos) -- (0.55,\pf@ppos);}
+% one complete instrument with the hook load. #1 = pointer force, #2 = load? (1/0)
+\newcommand\pf@ss@instrument[2]{%
+  \edef\pf@cap{\pf@sk{capacity}}\edef\pf@Ls{\pf@sk{length}}%
+  \edef\pf@bodycol{\ifpf@ss@col pfss\pf@cap!35!white\else pfssface\fi}\edef\pf@capcol{\ifpf@ss@col pfss\pf@cap\else pfss10!80!white\fi}%
+  \draw[line width=1pt] (0,1.65) circle[radius=0.17]; \draw[line width=1pt] (0,1.48) -- (0,1.35);
+  \filldraw[fill=\pf@bodycol, line width=1pt, rounded corners=4pt] (-1.05,-\pf@Ls-0.9) rectangle (1.05,1.0);
+  \filldraw[fill=\pf@capcol, line width=1pt, rounded corners=3pt] (-1.15,1.0) rectangle (1.15,1.35);
+  \node[font=\tiny\bfseries] at (0,1.175) {\pf@cap\,N\pf@ifstr{\pf@sk{units}}{newtons}{}{ / \fpeval{\pf@cap*100}\,g}};
+  \node[font=\scriptsize\bfseries] at (-0.75,0.7) {\pf@ifstr{\pf@sk{units}}{grams}{g}{N}};
+  \pf@ifstr{\pf@sk{units}}{both}{\node[font=\scriptsize\bfseries] at (0.75,0.7) {g};}{}%
+  \pf@ss@face{#1}%
+  % rod and hook
+  \edef\pf@hy{\fpeval{-\pf@Ls-0.9}}%
+  \draw[line width=1.3pt] (0,\pf@hy) -- (0,\pf@hy-0.45) arc[start angle=0,end angle=-200,radius=0.17];
+  \ifnum#2=1
+  \pf@ifstr{\pf@sk{hook}}{block}{\draw[line width=0.8pt] (-0.17,\pf@hy-0.62) -- (-0.17,\pf@hy-0.95);
+     \filldraw[fill=pfbody, line width=1pt, rounded corners=1pt] (-0.75,\pf@hy-0.95) rectangle (0.75,\pf@hy-2.0);
+     \node[font=\small] at (0,\pf@hy-1.475) {\pf@lab{\pf@sk{block label}}};}{}%
+  \pf@ifstr{\pf@sk{hook}}{masses}{\draw[line width=0.8pt] (-0.17,\pf@hy-0.62) -- (-0.17,\pf@hy-0.9);
+     \foreach \pf@m in {1,...,\pf@sk{masses}}{\filldraw[fill=pfgrid!50, line width=0.8pt] (-0.6,\pf@hy-0.6-0.32*\pf@m) rectangle (0.6,\pf@hy-0.9-0.32*\pf@m);}
+     \draw[line width=1pt] (-0.17,\pf@hy-0.9) -- (-0.17,\pf@hy-0.92-0.32*\pf@sk{masses});}{}%
+  \fi}
+\newcommand\pfSpringScale[1][]{%
+  \begingroup\pgfqkeys{/pf/spring}{colored=true,#1}%
+  \edef\pf@F{\fpeval{\pf@sk{reading}+\pf@sk{zero}}}% where the pointer sits
+  \edef\pf@show{\pf@sk{show}}\edef\pf@Ls{\pf@sk{length}}\edef\pf@cap{\pf@sk{capacity}}\pf@ss@steps{\pf@cap}%
+  \edef\pf@py{\fpeval{-\pf@F/\pf@cap*\pf@Ls}}%
+  \begin{tikzpicture}[pf, scale=\pf@sk{scale}]
+  \pf@ifstr{\pf@show}{magnifier}{}{%
+    \ifpf@ss@unl\begin{scope}[xshift=-2.8cm]\pf@ss@instrument{\pf@sk{zero}}{0}\end{scope}\fi
+    \pf@ss@instrument{\pf@F}{\pf@ifstr{\pf@sk{hook}}{nothing}{0}{1}}}%
+  \pf@ifstr{\pf@show}{instrument}{}{%
+    % magnifier: zoom so that about N numbered marks are visible
+    \def\pf@MR{2.4}\edef\pf@zoom{\fpeval{2*\pf@MR*0.8/(\pf@sk{magnifier marks}*\pf@maj/\pf@cap*\pf@Ls)}}%
+    \edef\pf@zoom{\fpeval{min(\pf@zoom,6)}}%
+    \edef\pf@mx{\pf@ifstr{\pf@show}{magnifier}{0}{4.6}}\edef\pf@my{\pf@py}%
+    \pf@ifstr{\pf@show}{magnifier}{}{%
+      \edef\pf@sr{\fpeval{\pf@MR/\pf@zoom}}%
+      \draw[line width=0.6pt] (0,\pf@py) circle[radius=\pf@sr];
+      \draw[line width=0.5pt, dash pattern=on 3pt off 2pt] (0,\pf@py+\pf@sr) -- (\pf@mx,\pf@my+\pf@MR) (0,\pf@py-\pf@sr) -- (\pf@mx,\pf@my-\pf@MR);}%
+    \begin{scope}
+      \clip (\pf@mx,\pf@my) circle[radius=\pf@MR];
+      \fill[pfssface] (\pf@mx,\pf@my) circle[radius=\pf@MR];
+      \begin{scope}[shift={(\pf@mx,\pf@my)}, scale=\pf@zoom, every node/.append style={scale=\pf@zoom*0.75}]
+        \begin{scope}[shift={(0,-\pf@py)}]\pf@ss@face{\pf@F}\end{scope}
+      \end{scope}
+    \end{scope}
+    \draw[line width=1.6pt] (\pf@mx,\pf@my) circle[radius=\pf@MR];}%
+  \pf@ifnolab{\pf@sk{title}}{}{\node[font=\bfseries, anchor=south] at (current bounding box.north) {\pf@sk{title}};}%
+  \ifpf@ss@key\node[anchor=north, font=\small] at (current bounding box.south) {Reading: \pf@ifstr{\pf@sk{units}}{grams}{\fpeval{round(\pf@sk{reading}*100,1)}\,g}{\fpeval{round(\pf@sk{reading},2)}\,N}};\fi
+  \end{tikzpicture}\endgroup}

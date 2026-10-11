@@ -1,0 +1,86 @@
+%% ===================================================== circuits (uses circuitikz)
+%% \pfCircuit[arrangement=series|parallel, part={type=resistor,name=R_1,value=2\,\Omega}, ...]
+\newif\ifpf@c@amm \newif\ifpf@c@pol
+\pgfqkeys{/pf/circuit}{
+  arrangement/.initial=series,
+  part/.code={\pf@append\pf@c@list{#1}},
+  parts/.code={\foreach \pf@t/\pf@a/\pf@b in {#1}{\xdef\pf@tmp{type=\pf@t,name={\unexpanded\expandafter{\pf@a}},value={\unexpanded\expandafter{\pf@b}}}%
+      \expandafter\pf@append\expandafter\pf@c@listg\expandafter{\pf@tmp}\global\let\pf@c@listg\pf@c@listg}\let\pf@c@list\pf@c@listg},
+  source/.initial=battery,       % cell | battery
+  source name/.initial=, source value/.initial=12\,\mathrm{V},
+  polarity/.is if=pf@c@pol,
+  switch/.initial=none,          % none | closed | open
+  ammeter/.is if=pf@c@amm, ammeter reading/.initial=,
+  voltmeter/.initial=none,       % none | source | 1 | 2 | ...
+  voltmeter reading/.initial=,
+  symbols/.initial=us,           % us | iec
+  title/.initial=,
+  width/.initial=, height/.initial=3.6,
+  mirror/.is if=pf@mirror, color/.is if=pf@color, scale/.initial=1,
+}
+\pgfqkeys{/pf/cpart}{type/.initial=resistor, name/.initial=, value/.initial=}
+\def\pf@ck#1{\pgfkeysvalueof{/pf/circuit/#1}}
+% component name for a part type
+\newcommand\pf@c@comp[1]{\pf@ifstr{#1}{bulb}{\pf@ifstr{\pf@ck{symbols}}{iec}{lamp}{bulb}}{R}}
+\newcommand\pf@c@meter[1]{rmeter, t=#1}
+\newcommand\pfCircuit[1][]{%
+  \begingroup\let\pf@c@list\relax\global\let\pf@c@listg\relax
+  \pgfqkeys{/pf/circuit}{#1}%
+  \ifx\pf@c@list\relax\pgfqkeys{/pf/circuit}{parts={resistor/R_1/2\,\Omega, resistor/R_2/4\,\Omega, resistor/R_3/6\,\Omega}}\fi
+  % count parts
+  \count@=0 \def\pf@item##1{\advance\count@ 1 }\pf@c@list \edef\pf@np{\the\count@}%
+  \edef\pf@H{\pf@ck{height}}%
+  \edef\pf@arr{\pf@ck{arrangement}}%
+  \edef\pf@sp{\pf@ifstr{\pf@arr}{series}{2.6}{\pf@ifstr{\pf@ck{voltmeter}}{none}{2.4}{\pf@ifstr{\pf@ck{voltmeter}}{source}{2.4}{3.0}}}}%
+  \edef\pf@W{\pf@ck{width}}\pf@ifstr{\pf@W}{}{\edef\pf@W{\fpeval{\pf@ifstr{\pf@arr}{series}{\pf@np*\pf@sp+1.6+\pf@ifstr{\pf@ck{switch}}{none}{0}{1.4}+\ifpf@c@amm 1.6\else 0\fi}{1.9+(\pf@np-1)*\pf@sp}}}}{}%
+  \edef\pf@srccomp{\pf@ifstr{\pf@ck{source}}{cell}{battery1}{battery}}%
+  \begin{tikzpicture}[pf, scale=\pf@ck{scale}, line width=1pt,
+     circuitikz/bipoles/length=1.1cm, xscale=\ifpf@mirror -1\else 1\fi]
+  \pf@ifstr{\pf@ck{symbols}}{iec}{\ctikzset{resistors/scale=0.8, resistor=european}}{\ctikzset{resistor=american}}%
+  \ctikzset{bipoles/thickness=1.5}%
+  \def\pf@ccol{\ifpf@color pfblue\else pfink\fi}%
+  % ---- left side: source (and, in parallel circuits, the ammeter)
+  \pf@ifstr{\pf@arr}{series}{\edef\pf@ammleft{0}}{\edef\pf@ammleft{\ifpf@c@amm 1\else 0\fi}}%
+  \ifnum\pf@ammleft=1
+    \draw (0,0) to[\pf@srccomp, invert, color=\ifpf@color pfred\else pfink\fi, l_={\pf@lab{\pf@ck{source value}}}, a^={\pf@lab{\pf@ck{source name}}}] (0,\pf@H*0.5)
+          to[rmeter, t=A, l_={\pf@lab{\pf@ck{ammeter reading}}}, color=\ifpf@color pfgreen\else pfink\fi] (0,\pf@H);
+  \else
+    \draw (0,0) to[\pf@srccomp, invert, color=\ifpf@color pfred\else pfink\fi, l_={\pf@lab{\pf@ck{source value}}}, a^={\pf@lab{\pf@ck{source name}}}] (0,\pf@H);
+  \fi
+  \ifpf@c@pol\node[font=\small] at (0.3,\ifnum\pf@ammleft=1 \pf@H*0.5-0.15\else \pf@H-0.15\fi) {$+$};\node[font=\small] at (0.3,0.15) {$-$};\fi
+  \pf@ifstr{\pf@ck{voltmeter}}{source}{\draw (0,0.25) -- (-1.3,0.25) to[rmeter, t=V, l_={\pf@lab{\pf@ck{voltmeter reading}}}] (-1.3,\ifnum\pf@ammleft=1 \pf@H*0.5-0.25\else\pf@H-0.25\fi) -- (0,\ifnum\pf@ammleft=1 \pf@H*0.5-0.25\else\pf@H-0.25\fi);
+     \fill (0,0.25) circle[radius=0.06] (0,\ifnum\pf@ammleft=1 \pf@H*0.5-0.25\else\pf@H-0.25\fi) circle[radius=0.06];}{}%
+  \draw (0,0) -- (\pf@W,0);
+  \pf@ifstr{\pf@arr}{series}{%
+    % ---- series: parts along the top wire
+    \draw (0,\pf@H) -- (0.8,\pf@H);
+    \count@=0
+    \def\pf@item##1{\advance\count@ 1
+      \pgfqkeys{/pf/cpart}{type=resistor,name=,value=,##1}%
+      \edef\pf@xa{\fpeval{0.8+(\the\count@-1)*\pf@sp}}\edef\pf@xb{\fpeval{\pf@xa+\pf@sp}}%
+      \draw (\pf@xa,\pf@H) -- (\pf@xa+0.45,\pf@H) to[\pf@c@comp{\pgfkeysvalueof{/pf/cpart/type}}, color=\pf@ccol, l^={\pf@lab{\pgfkeysvalueof{/pf/cpart/name}}}, a_={\pf@lab{\pgfkeysvalueof{/pf/cpart/value}}}] (\pf@xb-0.45,\pf@H) -- (\pf@xb,\pf@H);
+      \pf@ifstr{\pf@ck{voltmeter}}{\the\count@}{%
+        \draw (\pf@xa+0.25,\pf@H) -- (\pf@xa+0.25,\pf@H+1.3) to[rmeter, t=V, l={\pf@lab{\pf@ck{voltmeter reading}}}] (\pf@xb-0.25,\pf@H+1.3) -- (\pf@xb-0.25,\pf@H);
+        \fill (\pf@xa+0.25,\pf@H) circle[radius=0.06] (\pf@xb-0.25,\pf@H) circle[radius=0.06];}{}}%
+    \pf@c@list
+    \edef\pf@xe{\fpeval{0.8+\pf@np*\pf@sp}}%
+    \draw (\pf@xe,\pf@H) \pf@ifstr{\pf@ck{switch}}{none}{}{-- ++(0.2,0) to[\pf@ifstr{\pf@ck{switch}}{open}{nos}{ncs}] ++(1.2,0)}
+       \ifpf@c@amm -- ++(0.2,0) to[rmeter, t=A, l^={\pf@lab{\pf@ck{ammeter reading}}}, color=\ifpf@color pfgreen\else pfink\fi] ++(1.4,0)\fi
+       -- (\pf@W,\pf@H) -- (\pf@W,0);
+  }{%
+    % ---- parallel: vertical branches
+    \pf@ifstr{\pf@ck{switch}}{none}{\draw (0,\pf@H) -- (\pf@W,\pf@H);}{\draw (0,\pf@H) -- (0.25,\pf@H) to[\pf@ifstr{\pf@ck{switch}}{open}{nos}{ncs}] (1.45,\pf@H) -- (\pf@W,\pf@H);}
+    \count@=0
+    \def\pf@item##1{\advance\count@ 1
+      \pgfqkeys{/pf/cpart}{type=resistor,name=,value=,##1}%
+      \edef\pf@xa{\fpeval{1.9+(\the\count@-1)*\pf@sp}}%
+      \draw (\pf@xa,\pf@H) to[\pf@c@comp{\pgfkeysvalueof{/pf/cpart/type}}, color=\pf@ccol, l^={\pf@lab{\pgfkeysvalueof{/pf/cpart/name}}}, a_={\pf@lab{\pgfkeysvalueof{/pf/cpart/value}}}, -*] (\pf@xa,0);
+      \fill (\pf@xa,\pf@H) circle[radius=0.06];
+      \pf@ifstr{\pf@ck{voltmeter}}{\the\count@}{%
+        \draw (\pf@xa,\pf@H-0.35) -- (\pf@xa+1.25,\pf@H-0.35) to[rmeter, t=V, l_={\pf@lab{\pf@ck{voltmeter reading}}}] (\pf@xa+1.25,0.35) -- (\pf@xa,0.35);
+        \fill (\pf@xa,\pf@H-0.35) circle[radius=0.06] (\pf@xa,0.35) circle[radius=0.06];}{}}%
+    \pf@c@list
+    \edef\pf@xl{\fpeval{1.9+(\pf@np-1)*\pf@sp}}%
+  }%
+  \pf@ifnolab{\pf@ck{title}}{}{\node[font=\bfseries, anchor=south] at (current bounding box.north) {\pf@txtlab{\pf@ck{title}}};}%
+  \end{tikzpicture}\endgroup}

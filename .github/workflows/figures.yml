@@ -1,0 +1,21 @@
+name: Figures
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install TeX and dvisvgm
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-pictures texlive-fonts-recommended dvisvgm
+      - name: Compile TikZ to SVG
+        run: bash scripts/build_figures.sh
+      - name: SVG was produced
+        run: |
+          test -s web/figures/q24.svg
+          grep -q '<svg' web/figures/q24.svg

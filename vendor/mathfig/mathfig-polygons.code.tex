@@ -1,0 +1,583 @@
+% Original code written for Hari's teaching use; option set modelled on mathfigures.com (teacher.dev). No site code used.
+%% mathfig-polygons.code.tex -- polygon engine + \mfTriangle \mfRectangle \mfParallelogram
+%% \mfTrapezoid \mfKite \mfRegularPolygon.   Original code (see mathfig.sty).
+\usetikzlibrary{intersections}
+%% drawing primitives (normal catcodes, called from the expl3 engine with numeric arguments in cm)
+\newcommand\mf@seg[5]{\draw[#5] (#1,#2) -- (#3,#4);}
+\newcommand\mf@node[5]{\node[#5] at (#1,#2) {#3};}% x y text anchor? (#4 unused) options
+\newcommand\mf@nodeA[5]{\node[anchor=#4, #5] at (#1,#2) {#3};}
+\newcommand\mf@arc[6]{\draw[#6] (#1,#2) ++(#3:#5) arc[start angle=#3, end angle=#4, radius=#5];}
+\newcommand\mf@dot[3]{\fill[#3] (#1,#2) circle[radius=1.6pt];}
+\newcommand\mf@path[2]{\draw[#1] #2;}
+\ExplSyntaxOn
+\cs_new:Npn \__mf_v:n #1 { \tl_use:c { l__mf_ #1 _tl } }
+\cs_new:Npn \__mf_r:n #1 { \fp_eval:n { round(#1, 4) } }
+\cs_new_protected:Npn \__mf_set:nn #1#2 { \tl_set:cx { l__mf_ #1 _tl } { \fp_eval:n { round(#2, 6) } } }
+\cs_new_protected:Npn \__mf_sett:nn #1#2 { \tl_set:cn { l__mf_ #1 _tl } {#2} }  % store tokens
+\cs_new_protected:Npn \__mf_settx:nn #1#2 { \tl_set:cx { l__mf_ #1 _tl } {#2} }
+\int_new:N \l__mf_n_int
+\tl_new:N \l__mf_path_tl
+\int_new:N \l__mf_i_int
+\int_new:N \l__mf_j_int
+\int_new:N \l__mf_k_int
+\fp_new:N \l__mf_o_fp     % orientation +1 ccw, -1 cw
+\cs_new:Npn \__mf_nx:n #1 { \int_eval:n { \int_mod:nn {#1} {\l__mf_n_int} + 1 } }
+\cs_new:Npn \__mf_pv:n #1 { \int_eval:n { \int_mod:nn {#1 + \l__mf_n_int - 2} {\l__mf_n_int} + 1 } }
+%% ---- initialise a polygon with n vertices: clears marks
+\cs_new_protected:Npn \mf_poly_init:n #1
+  {
+    \int_set:Nn \l__mf_n_int {#1}
+    \int_step_inline:nn {#1}
+      {
+        \__mf_sett:nn {name##1} {} \__mf_sett:nn {alab##1} {} \__mf_set:nn {arcs##1} {0}
+        \__mf_set:nn {sq##1} {0}  \__mf_sett:nn {slab##1} {} \__mf_set:nn {ticks##1} {0}
+        \__mf_set:nn {arrows##1} {0}
+      }
+  }
+\cs_new_protected:Npn \mf_poly_pt:nnn #1#2#3 { \__mf_set:nn {x#1} {#2} \__mf_set:nn {y#1} {#3} }
+%% model measures (call before \mf_poly_fit:)
+\cs_new:Npn \mf_poly_len:n #1
+  { \fp_eval:n { sqrt( (\__mf_v:n{x\__mf_nx:n{#1}} - \__mf_v:n{x#1})^2 + (\__mf_v:n{y\__mf_nx:n{#1}} - \__mf_v:n{y#1})^2 ) } }
+\cs_new:Npn \mf_poly_ang:n #1
+  { \fp_eval:n { acosd( ( (\__mf_v:n{x\__mf_nx:n{#1}}-\__mf_v:n{x#1})*(\__mf_v:n{x\__mf_pv:n{#1}}-\__mf_v:n{x#1})
+                         + (\__mf_v:n{y\__mf_nx:n{#1}}-\__mf_v:n{y#1})*(\__mf_v:n{y\__mf_pv:n{#1}}-\__mf_v:n{y#1}) )
+                       / ( sqrt((\__mf_v:n{x\__mf_nx:n{#1}}-\__mf_v:n{x#1})^2+(\__mf_v:n{y\__mf_nx:n{#1}}-\__mf_v:n{y#1})^2)
+                         * sqrt((\__mf_v:n{x\__mf_pv:n{#1}}-\__mf_v:n{x#1})^2+(\__mf_v:n{y\__mf_pv:n{#1}}-\__mf_v:n{y#1})^2) ) ) } }
+%% extra points that follow the transformation (centre, feet ...): stored as ex<k>, ey<k>
+\int_new:N \l__mf_extra_int
+\cs_new_protected:Npn \mf_poly_extra:nnn #1#2#3 { \__mf_set:nn {ex#1} {#2} \__mf_set:nn {ey#1} {#3}
+   \int_set:Nn \l__mf_extra_int { \int_max:nn {\l__mf_extra_int} {#1} } }
+%% ---- transform: bottom side #1 (index, 0 = keep), flip #2 (0/1), turn #3 (deg), fit into #4 x #5 cm
+\cs_new_protected:Npn \__mf_xf:nnnn #1#2#3#4 % name-x name-y rot flip
+  {
+    \__mf_set:nn {tx} { \__mf_v:n{#1}*cosd(#3) - \__mf_v:n{#2}*sind(#3) }
+    \__mf_set:nn {ty} { \__mf_v:n{#1}*sind(#3) + \__mf_v:n{#2}*cosd(#3) }
+    \__mf_settx:nn {#1} { \__mf_v:n{tx} } \__mf_settx:nn {#2} { \__mf_v:n{ty} }
+    \int_compare:nNnT {#4} = {1} { \__mf_set:nn {#1} { - \__mf_v:n{#1} } }
+  }
+\cs_new_protected:Npn \mf_poly_fit:nnnnn #1#2#3#4#5
+  {
+    \int_compare:nNnTF {#1} > {0}
+      { \__mf_set:nn {rot} { - atand( \__mf_v:n{y\__mf_nx:n{#1}} - \__mf_v:n{y#1}, \__mf_v:n{x\__mf_nx:n{#1}} - \__mf_v:n{x#1} ) } }
+      { \__mf_set:nn {rot} {0} }
+    \int_step_inline:nn {\l__mf_n_int} { \__mf_xf:nnnn {x##1} {y##1} {\__mf_v:n{rot}} {#2} }
+    \int_step_inline:nn {\l__mf_extra_int} { \__mf_xf:nnnn {ex##1} {ey##1} {\__mf_v:n{rot}} {#2} }
+    \fp_compare:nNnF {#3} = {0}
+      {
+        \int_step_inline:nn {\l__mf_n_int} { \__mf_xf:nnnn {x##1} {y##1} {#3} {0} }
+        \int_step_inline:nn {\l__mf_extra_int} { \__mf_xf:nnnn {ex##1} {ey##1} {#3} {0} }
+      }
+    % orientation
+    \__mf_set:nn {area} {0}
+    \int_step_inline:nn {\l__mf_n_int}
+      { \__mf_set:nn {area} { \__mf_v:n{area} + \__mf_v:n{x##1}*\__mf_v:n{y\__mf_nx:n{##1}} - \__mf_v:n{x\__mf_nx:n{##1}}*\__mf_v:n{y##1} } }
+    \fp_set:Nn \l__mf_o_fp { \__mf_v:n{area} >= 0 ? 1 : -1 }
+    % bounding box and scale
+    \__mf_settx:nn {minx} {\__mf_v:n{x1}} \__mf_settx:nn {maxx} {\__mf_v:n{x1}}
+    \__mf_settx:nn {miny} {\__mf_v:n{y1}} \__mf_settx:nn {maxy} {\__mf_v:n{y1}}
+    \int_step_inline:nn {\l__mf_n_int}
+      {
+        \__mf_set:nn {minx} { min(\__mf_v:n{minx}, \__mf_v:n{x##1}) } \__mf_set:nn {maxx} { max(\__mf_v:n{maxx}, \__mf_v:n{x##1}) }
+        \__mf_set:nn {miny} { min(\__mf_v:n{miny}, \__mf_v:n{y##1}) } \__mf_set:nn {maxy} { max(\__mf_v:n{maxy}, \__mf_v:n{y##1}) }
+      }
+    \__mf_set:nn {sc} { min( (#4) / max(\__mf_v:n{maxx}-\__mf_v:n{minx}, 1e-6), (#5) / max(\__mf_v:n{maxy}-\__mf_v:n{miny}, 1e-6) ) }
+    \int_step_inline:nn {\l__mf_n_int}
+      { \__mf_set:nn {x##1} { (\__mf_v:n{x##1}-\__mf_v:n{minx})*\__mf_v:n{sc} }
+        \__mf_set:nn {y##1} { (\__mf_v:n{y##1}-\__mf_v:n{miny})*\__mf_v:n{sc} } }
+    \int_step_inline:nn {\l__mf_extra_int}
+      { \__mf_set:nn {ex##1} { (\__mf_v:n{ex##1}-\__mf_v:n{minx})*\__mf_v:n{sc} }
+        \__mf_set:nn {ey##1} { (\__mf_v:n{ey##1}-\__mf_v:n{miny})*\__mf_v:n{sc} } }
+  }
+%% ---- drawing (inside a tikzpicture)
+\cs_new_protected:Npn \mf_poly_outline:n #1 % options
+  {
+    \tl_clear:N \l__mf_path_tl
+    \int_step_inline:nn {\l__mf_n_int} { \tl_put_right:Nx \l__mf_path_tl { (\__mf_v:n{x##1},\__mf_v:n{y##1})~--~ } }
+    \tl_put_right:Nn \l__mf_path_tl { cycle }
+    \use:e { \exp_not:N \mf@path {#1} { \exp_not:V \l__mf_path_tl } }
+  }
+\cs_new_protected:Npn \__mf_side_marks:n #1
+  {
+    \int_set:Nn \l__mf_j_int { \__mf_nx:n {#1} }
+    \__mf_set:nn {L} { sqrt((\__mf_v:n{x\int_use:N\l__mf_j_int}-\__mf_v:n{x#1})^2+(\__mf_v:n{y\int_use:N\l__mf_j_int}-\__mf_v:n{y#1})^2) }
+    \__mf_set:nn {tx} { (\__mf_v:n{x\int_use:N\l__mf_j_int}-\__mf_v:n{x#1})/\__mf_v:n{L} }
+    \__mf_set:nn {ty} { (\__mf_v:n{y\int_use:N\l__mf_j_int}-\__mf_v:n{y#1})/\__mf_v:n{L} }
+    \__mf_set:nn {nx} { \fp_use:N \l__mf_o_fp * \__mf_v:n{ty} }
+    \__mf_set:nn {ny} { - \fp_use:N \l__mf_o_fp * \__mf_v:n{tx} }
+    \__mf_set:nn {mx} { (\__mf_v:n{x\int_use:N\l__mf_j_int}+\__mf_v:n{x#1})/2 }
+    \__mf_set:nn {my} { (\__mf_v:n{y\int_use:N\l__mf_j_int}+\__mf_v:n{y#1})/2 }
+    % ticks
+    \int_set:Nn \l__mf_k_int { \__mf_v:n{ticks#1} }
+    \int_step_inline:nn {\l__mf_k_int}
+      {
+        \__mf_set:nn {off} { (##1 - (\l__mf_k_int+1)/2)*0.1 }
+        \use:e { \exp_not:N \mf@seg
+          {\__mf_r:n{\__mf_v:n{mx}+\__mf_v:n{off}*\__mf_v:n{tx}+0.13*\__mf_v:n{nx}}}
+          {\__mf_r:n{\__mf_v:n{my}+\__mf_v:n{off}*\__mf_v:n{ty}+0.13*\__mf_v:n{ny}}}
+          {\__mf_r:n{\__mf_v:n{mx}+\__mf_v:n{off}*\__mf_v:n{tx}-0.13*\__mf_v:n{nx}}}
+          {\__mf_r:n{\__mf_v:n{my}+\__mf_v:n{off}*\__mf_v:n{ty}-0.13*\__mf_v:n{ny}}} {mf~thin,~line~width=0.8pt} }
+      }
+    % parallel arrows (always pointing right, or up for vertical sides, so parallel sides match)
+    \__mf_set:nn {as} { (\__mf_v:n{tx} < -0.0001 || (abs(\__mf_v:n{tx}) <= 0.0001 && \__mf_v:n{ty} < 0)) ? -1 : 1 }
+    \__mf_set:nn {tx} { \__mf_v:n{as}*\__mf_v:n{tx} } \__mf_set:nn {ty} { \__mf_v:n{as}*\__mf_v:n{ty} }
+    \int_set:Nn \l__mf_k_int { \__mf_v:n{arrows#1} }
+    \int_step_inline:nn {\l__mf_k_int}
+      {
+        \__mf_set:nn {off} { (##1 - (\l__mf_k_int+1)/2)*0.16 + 0.08 }
+        \use:e { \exp_not:N \mf@seg
+          {\__mf_r:n{\__mf_v:n{mx}+(\__mf_v:n{off}-0.12)*\__mf_v:n{tx}}} {\__mf_r:n{\__mf_v:n{my}+(\__mf_v:n{off}-0.12)*\__mf_v:n{ty}}}
+          {\__mf_r:n{\__mf_v:n{mx}+\__mf_v:n{off}*\__mf_v:n{tx}}} {\__mf_r:n{\__mf_v:n{my}+\__mf_v:n{off}*\__mf_v:n{ty}}} {mf~barb,~line~width=0.9pt} }
+      }
+    % label
+    \tl_if_blank:eF { \__mf_v:n{slab#1} }
+      {
+        \__mf_set:nn {d} { \int_compare:nNnTF {\__mf_v:n{ticks#1}+\__mf_v:n{arrows#1}} > {0} {0.2} {0.1} }
+        \use:e { \exp_not:N \mf@nodeA
+          {\__mf_r:n{\__mf_v:n{mx}+\__mf_v:n{d}*\__mf_v:n{nx}}} {\__mf_r:n{\__mf_v:n{my}+\__mf_v:n{d}*\__mf_v:n{ny}}}
+          { \exp_not:N \mflab { \exp_not:v {l__mf_slab#1_tl} } }
+          { \fp_eval:n { round(atand(-\__mf_v:n{ny}, -\__mf_v:n{nx}),2) } } {} }
+      }
+  }
+\cs_new_protected:Npn \__mf_vertex_marks:n #1
+  {
+    \int_set:Nn \l__mf_j_int { \__mf_nx:n {#1} } \int_set:Nn \l__mf_k_int { \__mf_pv:n {#1} }
+    \__mf_set:nn {L1} { sqrt((\__mf_v:n{x\int_use:N\l__mf_j_int}-\__mf_v:n{x#1})^2+(\__mf_v:n{y\int_use:N\l__mf_j_int}-\__mf_v:n{y#1})^2) }
+    \__mf_set:nn {L2} { sqrt((\__mf_v:n{x\int_use:N\l__mf_k_int}-\__mf_v:n{x#1})^2+(\__mf_v:n{y\int_use:N\l__mf_k_int}-\__mf_v:n{y#1})^2) }
+    \__mf_set:nn {ax} { (\__mf_v:n{x\int_use:N\l__mf_j_int}-\__mf_v:n{x#1})/\__mf_v:n{L1} }
+    \__mf_set:nn {ay} { (\__mf_v:n{y\int_use:N\l__mf_j_int}-\__mf_v:n{y#1})/\__mf_v:n{L1} }
+    \__mf_set:nn {bx} { (\__mf_v:n{x\int_use:N\l__mf_k_int}-\__mf_v:n{x#1})/\__mf_v:n{L2} }
+    \__mf_set:nn {by} { (\__mf_v:n{y\int_use:N\l__mf_k_int}-\__mf_v:n{y#1})/\__mf_v:n{L2} }
+    \__mf_set:nn {th} { acosd( max(-1, min(1, \__mf_v:n{ax}*\__mf_v:n{bx}+\__mf_v:n{ay}*\__mf_v:n{by})) ) }
+    \__mf_set:nn {cx} { \__mf_v:n{ax}+\__mf_v:n{bx} } \__mf_set:nn {cy} { \__mf_v:n{ay}+\__mf_v:n{by} }
+    \__mf_set:nn {cl} { max(sqrt((\__mf_v:n{cx})^2+(\__mf_v:n{cy})^2), 1e-6) }
+    \__mf_set:nn {cx} { \__mf_v:n{cx}/\__mf_v:n{cl} } \__mf_set:nn {cy} { \__mf_v:n{cy}/\__mf_v:n{cl} }
+    % right-angle square
+    \int_compare:nNnTF { \__mf_v:n{sq#1} } = {1}
+      {
+        \use:e { \exp_not:N \mf@path {mf~thin}
+          { (\__mf_r:n{\__mf_v:n{x#1}+0.2*\__mf_v:n{ax}},\__mf_r:n{\__mf_v:n{y#1}+0.2*\__mf_v:n{ay}}) --
+            (\__mf_r:n{\__mf_v:n{x#1}+0.2*(\__mf_v:n{ax}+\__mf_v:n{bx})},\__mf_r:n{\__mf_v:n{y#1}+0.2*(\__mf_v:n{ay}+\__mf_v:n{by})}) --
+            (\__mf_r:n{\__mf_v:n{x#1}+0.2*\__mf_v:n{bx}},\__mf_r:n{\__mf_v:n{y#1}+0.2*\__mf_v:n{by}}) } }
+      }
+      {
+        \int_set:Nn \l__mf_i_int { \__mf_v:n{arcs#1} }
+        \int_compare:nNnT { \l__mf_i_int } = {0} { \tl_if_blank:eF { \__mf_v:n{alab#1} } { \int_set:Nn \l__mf_i_int {1} } }
+        \__mf_set:nn {st} { \fp_compare:nNnTF {\l__mf_o_fp} > {0} { atand(\__mf_v:n{ay},\__mf_v:n{ax}) } { atand(\__mf_v:n{by},\__mf_v:n{bx}) } }
+        \int_step_inline:nn {\l__mf_i_int}
+          {
+            \use:e { \exp_not:N \mf@arc {\__mf_v:n{x#1}} {\__mf_v:n{y#1}} {\__mf_v:n{st}} {\__mf_r:n{\__mf_v:n{st}+\__mf_v:n{th}}}
+               {\__mf_r:n{ (0.32 + (##1-1)*0.07) * max(1, min(2.2, 0.45/sind(max(\__mf_v:n{th},8)))) }} {mf~thin} }
+          }
+      }
+    % angle label
+    \tl_if_blank:eF { \__mf_v:n{alab#1} }
+      {
+        \__mf_set:nn {d} { max(0.72, min(2.6, 0.33/sind(max(\__mf_v:n{th},6)/2))) }
+        \use:e { \exp_not:N \mf@node {\__mf_r:n{\__mf_v:n{x#1}+\__mf_v:n{d}*\__mf_v:n{cx}}} {\__mf_r:n{\__mf_v:n{y#1}+\__mf_v:n{d}*\__mf_v:n{cy}}}
+           { \exp_not:N \mflab { \exp_not:v {l__mf_alab#1_tl} } } {} {inner~sep=0.5pt} }
+      }
+    % vertex name
+    \tl_if_blank:eF { \__mf_v:n{name#1} }
+      {
+        \use:e { \exp_not:N \mf@nodeA {\__mf_r:n{\__mf_v:n{x#1}-0.08*\__mf_v:n{cx}}} {\__mf_r:n{\__mf_v:n{y#1}-0.08*\__mf_v:n{cy}}}
+           { \exp_not:N \mflab { \exp_not:v {l__mf_name#1_tl} } } { \__mf_r:n{round(atand(\__mf_v:n{cy},\__mf_v:n{cx}),2)} } {inner~sep=1pt} }
+      }
+  }
+\cs_new_protected:Npn \mf_poly_marks:
+  {
+    \int_step_inline:nn {\l__mf_n_int} { \__mf_side_marks:n {##1} }
+    \int_step_inline:nn {\l__mf_n_int} { \__mf_vertex_marks:n {##1} }
+  }
+%% ---- height from vertex #1 to the line of side #2;  #3 label, #4 foot name, #5 style, #6 squares(0/1)
+\cs_new_protected:Npn \mf_poly_height:nnnnnn #1#2#3#4#5#6
+  {
+    \int_set:Nn \l__mf_j_int { \__mf_nx:n {#2} }
+    \__mf_set:nn {dx} { \__mf_v:n{x\int_use:N\l__mf_j_int}-\__mf_v:n{x#2} } \__mf_set:nn {dy} { \__mf_v:n{y\int_use:N\l__mf_j_int}-\__mf_v:n{y#2} }
+    \__mf_set:nn {t} { ((\__mf_v:n{x#1}-\__mf_v:n{x#2})*\__mf_v:n{dx}+(\__mf_v:n{y#1}-\__mf_v:n{y#2})*\__mf_v:n{dy})/((\__mf_v:n{dx})^2+(\__mf_v:n{dy})^2) }
+    \__mf_set:nn {fx} { \__mf_v:n{x#2}+\__mf_v:n{t}*\__mf_v:n{dx} } \__mf_set:nn {fy} { \__mf_v:n{y#2}+\__mf_v:n{t}*\__mf_v:n{dy} }
+    % extension of the side when the foot falls outside it
+    \fp_compare:nNnT {\__mf_v:n{t}} < {-0.001}
+      { \use:e { \exp_not:N \mf@seg {\__mf_v:n{x#2}} {\__mf_v:n{y#2}} {\__mf_v:n{fx}} {\__mf_v:n{fy}} {mf~hidden} } }
+    \fp_compare:nNnT {\__mf_v:n{t}} > {1.001}
+      { \use:e { \exp_not:N \mf@seg {\__mf_v:n{x\int_use:N\l__mf_j_int}} {\__mf_v:n{y\int_use:N\l__mf_j_int}} {\__mf_v:n{fx}} {\__mf_v:n{fy}} {mf~hidden} } }
+    \use:e { \exp_not:N \mf@seg {\__mf_v:n{x#1}} {\__mf_v:n{y#1}} {\__mf_v:n{fx}} {\__mf_v:n{fy}} {#5} }
+    \__mf_set:nn {hl} { max(sqrt((\__mf_v:n{x#1}-\__mf_v:n{fx})^2+(\__mf_v:n{y#1}-\__mf_v:n{fy})^2),1e-6) }
+    \__mf_set:nn {ux} { (\__mf_v:n{x#1}-\__mf_v:n{fx})/\__mf_v:n{hl} } \__mf_set:nn {uy} { (\__mf_v:n{y#1}-\__mf_v:n{fy})/\__mf_v:n{hl} }
+    \__mf_set:nn {sl} { sqrt((\__mf_v:n{dx})^2+(\__mf_v:n{dy})^2) }
+    \__mf_set:nn {vs} { \__mf_v:n{t} > 0.5 ? -1 : 1 }
+    \__mf_set:nn {vx} { \__mf_v:n{vs}*\__mf_v:n{dx}/\__mf_v:n{sl} } \__mf_set:nn {vy} { \__mf_v:n{vs}*\__mf_v:n{dy}/\__mf_v:n{sl} }
+    \int_compare:nNnT {#6} = {1}
+      { \use:e { \exp_not:N \mf@path {mf~thin}
+          { (\__mf_r:n{\__mf_v:n{fx}+0.2*\__mf_v:n{ux}},\__mf_r:n{\__mf_v:n{fy}+0.2*\__mf_v:n{uy}}) --
+            (\__mf_r:n{\__mf_v:n{fx}+0.2*(\__mf_v:n{ux}+\__mf_v:n{vx})},\__mf_r:n{\__mf_v:n{fy}+0.2*(\__mf_v:n{uy}+\__mf_v:n{vy})}) --
+            (\__mf_r:n{\__mf_v:n{fx}+0.2*\__mf_v:n{vx}},\__mf_r:n{\__mf_v:n{fy}+0.2*\__mf_v:n{vy}}) } } }
+    \tl_if_blank:nF {#3}
+      { \use:e { \exp_not:N \mf@nodeA {\__mf_r:n{(\__mf_v:n{x#1}+\__mf_v:n{fx})/2 + 0.06*\__mf_v:n{vx}}} {\__mf_r:n{(\__mf_v:n{y#1}+\__mf_v:n{fy})/2 + 0.06*\__mf_v:n{vy}}}
+          { \exp_not:N \mflab {\exp_not:n{#3}} } { \__mf_r:n{round(atand(-\__mf_v:n{vy},-\__mf_v:n{vx}),2)} } {mf~halo} } }
+    \tl_if_blank:nF {#4}
+      { \use:e { \exp_not:N \mf@nodeA {\__mf_r:n{\__mf_v:n{fx}-0.1*\__mf_v:n{ux}}} {\__mf_r:n{\__mf_v:n{fy}-0.1*\__mf_v:n{uy}}}
+          { \exp_not:N \mflab {\exp_not:n{#4}} } { \__mf_r:n{round(atand(\__mf_v:n{uy},\__mf_v:n{ux}),2)} } {} } }
+  }
+%% ---- segment between vertices/extra points given as coordinates; #5 label #6 style
+\cs_new_protected:Npn \mf_poly_segment:nnnnnn #1#2#3#4#5#6
+  {
+    \use:e { \exp_not:N \mf@seg {\__mf_r:n{#1}} {\__mf_r:n{#2}} {\__mf_r:n{#3}} {\__mf_r:n{#4}} {#6} }
+    \tl_if_blank:nF {#5}
+      {
+        \__mf_set:nn {dx} {(#3)-(#1)} \__mf_set:nn {dy} {(#4)-(#2)}
+        \__mf_set:nn {sl} { max(sqrt((\__mf_v:n{dx})^2+(\__mf_v:n{dy})^2),1e-6) }
+        \__mf_set:nn {px} { -\__mf_v:n{dy}/\__mf_v:n{sl} } \__mf_set:nn {py} { \__mf_v:n{dx}/\__mf_v:n{sl} }
+        \fp_compare:nNnT { \__mf_v:n{py} } < {0} { \__mf_set:nn {px} {-\__mf_v:n{px}} \__mf_set:nn {py} {-\__mf_v:n{py}} }
+        \use:e { \exp_not:N \mf@nodeA {\__mf_r:n{((#1)+(#3))/2+0.06*\__mf_v:n{px}}} {\__mf_r:n{((#2)+(#4))/2+0.06*\__mf_v:n{py}}}
+          { \exp_not:N \mflab {\exp_not:n{#5}} } { \__mf_r:n{round(atand(-\__mf_v:n{py},-\__mf_v:n{px}),2)} } {mf~halo} }
+      }
+  }
+%% diagonals of a quadrilateral (vertices 1..4): #1 dAC(0/1) #2 label #3 style #4 dBD #5 label #6 style #7 cross name #8 squares
+\cs_new_protected:Npn \mf_quad_diagonals:nnnnnnnn #1#2#3#4#5#6#7#8
+  {
+    \int_compare:nNnT {#1} = {1} { \mf_poly_segment:nnnnnn {\__mf_v:n{x1}} {\__mf_v:n{y1}} {\__mf_v:n{x3}} {\__mf_v:n{y3}} {#2} {#3} }
+    \int_compare:nNnT {#4} = {1} { \mf_poly_segment:nnnnnn {\__mf_v:n{x2}} {\__mf_v:n{y2}} {\__mf_v:n{x4}} {\__mf_v:n{y4}} {#5} {#6} }
+    \bool_lazy_and:nnT { \int_compare_p:nNn {#1} = {1} } { \int_compare_p:nNn {#4} = {1} }
+      {
+        % intersection of 1-3 and 2-4
+        \__mf_set:nn {d1x} {\__mf_v:n{x3}-\__mf_v:n{x1}} \__mf_set:nn {d1y} {\__mf_v:n{y3}-\__mf_v:n{y1}}
+        \__mf_set:nn {d2x} {\__mf_v:n{x4}-\__mf_v:n{x2}} \__mf_set:nn {d2y} {\__mf_v:n{y4}-\__mf_v:n{y2}}
+        \__mf_set:nn {den} { \__mf_v:n{d1x}*\__mf_v:n{d2y} - \__mf_v:n{d1y}*\__mf_v:n{d2x} }
+        \__mf_set:nn {s} { ((\__mf_v:n{x2}-\__mf_v:n{x1})*\__mf_v:n{d2y} - (\__mf_v:n{y2}-\__mf_v:n{y1})*\__mf_v:n{d2x}) / \__mf_v:n{den} }
+        \__mf_set:nn {ix} { \__mf_v:n{x1}+\__mf_v:n{s}*\__mf_v:n{d1x} } \__mf_set:nn {iy} { \__mf_v:n{y1}+\__mf_v:n{s}*\__mf_v:n{d1y} }
+        \__mf_set:nn {l1} { sqrt((\__mf_v:n{d1x})^2+(\__mf_v:n{d1y})^2) } \__mf_set:nn {l2} { sqrt((\__mf_v:n{d2x})^2+(\__mf_v:n{d2y})^2) }
+        \__mf_set:nn {cs} { (\__mf_v:n{d1x}*\__mf_v:n{d2x}+\__mf_v:n{d1y}*\__mf_v:n{d2y})/(\__mf_v:n{l1}*\__mf_v:n{l2}) }
+        \bool_lazy_and:nnT { \int_compare_p:nNn {#8} = {1} } { \fp_compare_p:nNn { abs(\__mf_v:n{cs}) } < {0.002} }
+          {
+            \__mf_set:nn {ux} {\__mf_v:n{d1x}/\__mf_v:n{l1}} \__mf_set:nn {uy} {\__mf_v:n{d1y}/\__mf_v:n{l1}}
+            \__mf_set:nn {vx} {\__mf_v:n{d2x}/\__mf_v:n{l2}} \__mf_set:nn {vy} {\__mf_v:n{d2y}/\__mf_v:n{l2}}
+            \use:e { \exp_not:N \mf@path {mf~thin}
+              { (\__mf_r:n{\__mf_v:n{ix}-0.17*\__mf_v:n{ux}},\__mf_r:n{\__mf_v:n{iy}-0.17*\__mf_v:n{uy}}) --
+                (\__mf_r:n{\__mf_v:n{ix}-0.17*(\__mf_v:n{ux}+\__mf_v:n{vx})},\__mf_r:n{\__mf_v:n{iy}-0.17*(\__mf_v:n{uy}+\__mf_v:n{vy})}) --
+                (\__mf_r:n{\__mf_v:n{ix}-0.17*\__mf_v:n{vx}},\__mf_r:n{\__mf_v:n{iy}-0.17*\__mf_v:n{vy}}) } }
+          }
+        \tl_if_blank:nF {#7}
+          { \use:e { \exp_not:N \mf@nodeA {\__mf_v:n{ix}} {\__mf_r:n{\__mf_v:n{iy}+0.12}} { \exp_not:N \mflab {\exp_not:n{#7}} } {south} {mf~halo} } }
+      }
+  }
+%% ================================================================= keys shared by the polygon macros
+\cs_new_protected:Npn \__mf_pkeys_letter:n #1
+  {
+    \pgfkeys{/mf/poly/.cd,
+      #1/.initial=, #1~label/.initial=auto, #1~arcs/.initial=0, #1~name/.initial=#1,
+      h#1/.initial=false, h#1~label/.initial=auto, h#1~foot/.initial=, h#1~style/.initial=dashed}
+  }
+\cs_new_protected:Npn \__mf_pkeys_side:n #1
+  { \pgfkeys{/mf/poly/.cd, #1/.initial=, #1~label/.initial=auto, #1~ticks/.initial=0, #1~arrows/.initial=0} }
+\clist_map_function:nN {A,B,C,D} \__mf_pkeys_letter:n
+\clist_map_function:nN {AB,BC,CA,CD,DA} \__mf_pkeys_side:n
+\pgfkeys{/mf/poly/.cd,
+  kind/.initial=, unit/.initial=, round/.initial=1, right~angle~squares/.initial=true,
+  bottom/.initial=, flip/.initial=false, turn/.initial=0, width/.initial=9, height/.initial=5.5, scale/.initial=1,
+  dAC/.initial=false, dAC~label/.initial=none, dAC~style/.initial=solid,
+  dBD/.initial=false, dBD~label/.initial=none, dBD~style/.initial=solid, cross/.initial=,
+  h/.initial=, n/.initial=6, size/.initial=8, size~by/.initial=side,
+  side~label/.initial=auto, side~ticks/.initial=0, angle~label/.initial=none, angle~arcs/.initial=0,
+  center~dot/.initial=true, center~name/.initial=, apothem/.initial=true, apothem~label/.initial=a, apothem~style/.initial=dashed,
+  radius/.initial=false, radius~label/.initial=measure, radius~style/.initial=dashed, radii/.initial=false, letters/.initial=false,
+  central~angle/.initial=none, labels/.initial=,
+  % convenience: style values
+  dashed/.code={}, }
+\cs_new:Npn \mf_pk:n #1 { \pgfkeysvalueof{/mf/poly/#1} }
+\cs_new:Npn \mf_bool:n #1 { \str_if_eq:eeTF {\mf_pk:n{#1}} {true} {1} { \str_if_eq:eeTF {\mf_pk:n{#1}} {1} {1} {0} } }
+\cs_new:Npn \mf_given:n #1 { \tl_if_blank:eTF {\mf_pk:n{#1}} {0} {1} }
+\cs_new:Npn \__mf_style:n #1 { \str_case:enF {#1} { {solid}{mf~thin,~line~width=0.8pt} {dashed}{mf~dashed} {dotted}{mf~dotted} } {#1} }
+%% fill the marks of vertex index #1 from letter #2 (given flag #3);  side index #4 from side key #5 (given #6)
+\cs_new_protected:Npn \mf_poly_vertex_from_keys:nn #1#2
+  {
+    \__mf_settx:nn {name#1} { \exp_not:e { \mf_pk:n {#2~name} } }
+    \mf_resolve:eeo { \mf_pk:n {#2~label} } { \mf_given:n {#2} } { \mf_num:n { \mf_poly_ang:n {#1} } ^\circ }
+    \__mf_settx:nn {alab#1} { \exp_not:V \l_mf_lab_tl }
+    \__mf_settx:nn {arcs#1} { \mf_pk:n {#2~arcs} }
+    \__mf_settx:nn {sq#1} { \int_eval:n { \mf_bool:n {right~angle~squares} * \fp_compare:nNnTF { abs(\mf_poly_ang:n{#1} - 90) } < {0.05} {1} {0} } }
+  }
+\cs_new_protected:Npn \mf_poly_side_from_keys:nn #1#2
+  {
+    \mf_resolve:eee { \mf_pk:n {#2~label} } { \mf_given:n {#2} } { \exp_not:N \mf_measure:nn { \mf_poly_len:n {#1} } { \mf_pk:n {unit} } }
+    \__mf_settx:nn {slab#1} { \exp_not:V \l_mf_lab_tl }
+    \__mf_settx:nn {ticks#1} { \mf_pk:n {#2~ticks} }
+    \__mf_settx:nn {arrows#1} { \mf_pk:n {#2~arrows} }
+  }
+\cs_generate_variant:Nn \tl_if_blank:nTF {e}
+\cs_generate_variant:Nn \tl_if_blank:nF {e}
+\cs_generate_variant:Nn \mf_resolve:nnn {eeo}
+%% common finishing: transform + draw.  #1 = list of side keys in order (for the bottom key)
+\cs_new_protected:Npn \mf_poly_finish:nn #1#2 % #1 side-key clist, #2 code for extras (drawn after outline)
+  {
+    \int_zero:N \l__mf_j_int
+    \tl_if_blank:eF { \mf_pk:n{bottom} }
+      { \int_zero:N \l__mf_k_int
+        \clist_map_inline:nn {#1} { \int_incr:N \l__mf_k_int \str_if_eq:eeT {##1} { \mf_pk:n{bottom} } { \int_set_eq:NN \l__mf_j_int \l__mf_k_int } } }
+    \mf_poly_fit:nnnnn { \int_use:N \l__mf_j_int } { \mf_bool:n {flip} } { \mf_pk:n {turn} } { \mf_pk:n {width} } { \mf_pk:n {height} }
+    \begin{tikzpicture}[mf, scale=\mf_pk:n{scale}, every~node/.append~style={font=\mf_font:}]
+      \mf_poly_outline:n {mf}
+      #2
+      \mf_poly_marks:
+    \end{tikzpicture}
+  }
+\cs_generate_variant:Nn \str_if_eq:nnT {ee}
+\cs_generate_variant:Nn \str_case:nnF {en}
+%% heights from letter #2 (vertex index #1) onto side index #3
+\cs_new_protected:Npn \mf_poly_height_from_keys:nnn #1#2#3
+  {
+    \int_compare:nNnT { \mf_bool:n {h#2} } = {1}
+      {
+        \int_set:Nn \l__mf_j_int { \__mf_nx:n {#3} }
+        \__mf_set:nn {hm} { abs( (\__mf_v:n{x\int_use:N\l__mf_j_int}-\__mf_v:n{x#3})*(\__mf_v:n{y#1}-\__mf_v:n{y#3})
+                                - (\__mf_v:n{y\int_use:N\l__mf_j_int}-\__mf_v:n{y#3})*(\__mf_v:n{x#1}-\__mf_v:n{x#3}) )
+                           / sqrt((\__mf_v:n{x\int_use:N\l__mf_j_int}-\__mf_v:n{x#3})^2+(\__mf_v:n{y\int_use:N\l__mf_j_int}-\__mf_v:n{y#3})^2) / \__mf_v:n{sc} }
+        \mf_resolve:eee { \mf_pk:n {h#2~label} } { 0 } { \exp_not:N \mf_measure:nn { \__mf_v:n{hm} } { \mf_pk:n {unit} } }
+        \tl_set_eq:NN \l_tmpb_tl \l_mf_lab_tl
+        \use:e { \exp_not:N \mf_poly_height:nnnnnn {#1} {#3} { \exp_not:V \l_tmpb_tl } { \mf_pk:n {h#2~foot} }
+                 { \__mf_style:n { \mf_pk:n {h#2~style} } } { \mf_bool:n {right~angle~squares} } }
+      }
+  }
+\ExplSyntaxOff
+%% ================================================================= \mfTriangle
+\ExplSyntaxOn
+\cs_new_protected:Npn \__mf_tri_solve:
+  {
+    % index 1 = A (side a = BC), 2 = B (b = CA), 3 = C (c = AB)
+    \__mf_settx:nn {ga1} { \mf_given:n {A} } \__mf_settx:nn {ga2} { \mf_given:n {B} } \__mf_settx:nn {ga3} { \mf_given:n {C} }
+    \__mf_settx:nn {gs1} { \mf_given:n {BC} } \__mf_settx:nn {gs2} { \mf_given:n {CA} } \__mf_settx:nn {gs3} { \mf_given:n {AB} }
+    \__mf_set:nn {a1} { \int_compare:nNnTF {\__mf_v:n{ga1}} = 1 { \mf_pk:n{A} } {0} }
+    \__mf_set:nn {a2} { \int_compare:nNnTF {\__mf_v:n{ga2}} = 1 { \mf_pk:n{B} } {0} }
+    \__mf_set:nn {a3} { \int_compare:nNnTF {\__mf_v:n{ga3}} = 1 { \mf_pk:n{C} } {0} }
+    \__mf_set:nn {s1} { \int_compare:nNnTF {\__mf_v:n{gs1}} = 1 { \mf_pk:n{BC} } {0} }
+    \__mf_set:nn {s2} { \int_compare:nNnTF {\__mf_v:n{gs2}} = 1 { \mf_pk:n{CA} } {0} }
+    \__mf_set:nn {s3} { \int_compare:nNnTF {\__mf_v:n{gs3}} = 1 { \mf_pk:n{AB} } {0} }
+    \int_set:Nn \l__mf_i_int { \__mf_v:n{ga1}+\__mf_v:n{ga2}+\__mf_v:n{ga3} }
+    \int_set:Nn \l__mf_j_int { \__mf_v:n{gs1}+\__mf_v:n{gs2}+\__mf_v:n{gs3} }
+    % known flags (start with given)
+    \int_step_inline:nn {3} { \__mf_settx:nn {ka##1} {\__mf_v:n{ga##1}} \__mf_settx:nn {ks##1} {\__mf_v:n{gs##1}} }
+    \int_compare:nNnT {\l__mf_i_int} = {2} { \__mf_tri_third_angle: \int_set:Nn \l__mf_i_int {3} }
+    \int_compare:nNnTF {\l__mf_j_int} = {3}
+      { \__mf_tri_sss: }
+      {
+        \int_compare:nNnTF {\l__mf_i_int} = {3}
+          { \__mf_tri_aas: }
+          {
+            \bool_lazy_and:nnTF { \int_compare_p:nNn {\l__mf_j_int} = {2} } { \int_compare_p:nNn {\l__mf_i_int} = {1} }
+              { \__mf_tri_two_sides_one_angle: }
+              {
+                \int_compare:nNnTF {\l__mf_i_int} = {1}
+                  { % one angle (+ maybe one side): isosceles about it
+                    \int_step_inline:nn {3} { \int_compare:nNnT {\__mf_v:n{ka##1}} = 0
+                       { \__mf_set:nn {a##1} { (180 - \__mf_v:n{a1}*\__mf_v:n{ka1} - \__mf_v:n{a2}*\__mf_v:n{ka2} - \__mf_v:n{a3}*\__mf_v:n{ka3})/2 } } }
+                    \int_step_inline:nn {3} { \__mf_settx:nn {ka##1} {1} }
+                    \__mf_tri_aas:
+                  }
+                  { % no angle: use equal sides for the missing ones
+                    \int_step_inline:nn {3} { \int_compare:nNnT {\__mf_v:n{ks##1}} = 0
+                       { \__mf_set:nn {s##1} { max(\__mf_v:n{s1},\__mf_v:n{s2},\__mf_v:n{s3}, 1) } } }
+                    \__mf_tri_sss:
+                  }
+              }
+          }
+      }
+  }
+\cs_new_protected:Npn \__mf_tri_third_angle:
+  { \int_step_inline:nn {3} { \int_compare:nNnT {\__mf_v:n{ka##1}} = 0
+      { \__mf_set:nn {a##1} { 180 - \__mf_v:n{a1} - \__mf_v:n{a2} - \__mf_v:n{a3} } \__mf_settx:nn {ka##1} {1} } } }
+\cs_new_protected:Npn \__mf_tri_sss:
+  {
+    \__mf_set:nn {a1} { acosd(((\__mf_v:n{s2})^2+(\__mf_v:n{s3})^2-(\__mf_v:n{s1})^2)/(2*\__mf_v:n{s2}*\__mf_v:n{s3})) }
+    \__mf_set:nn {a2} { acosd(((\__mf_v:n{s1})^2+(\__mf_v:n{s3})^2-(\__mf_v:n{s2})^2)/(2*\__mf_v:n{s1}*\__mf_v:n{s3})) }
+    \__mf_set:nn {a3} { 180 - \__mf_v:n{a1} - \__mf_v:n{a2} }
+  }
+\cs_new_protected:Npn \__mf_tri_aas:
+  {
+    \int_set:Nn \l__mf_k_int {0}
+    \int_step_inline:nn {3} { \int_compare:nNnT {\l__mf_k_int} = 0 { \int_compare:nNnT {\__mf_v:n{ks##1}} = 1 { \int_set:Nn \l__mf_k_int {##1} } } }
+    \int_compare:nNnT {\l__mf_k_int} = 0 { \int_set:Nn \l__mf_k_int {3} \__mf_set:nn {s3} {1} }
+    \__mf_set:nn {kk} { \__mf_v:n{s\int_use:N\l__mf_k_int} / sind(\__mf_v:n{a\int_use:N\l__mf_k_int}) }
+    \int_step_inline:nn {3} { \__mf_set:nn {s##1} { \__mf_v:n{kk} * sind(\__mf_v:n{a##1}) } }
+  }
+\cs_new_protected:Npn \__mf_tri_two_sides_one_angle:
+  {
+    \int_step_inline:nn {3} { \int_compare:nNnT {\__mf_v:n{ka##1}} = 1 { \int_set:Nn \l__mf_k_int {##1} } }
+    \int_compare:nNnTF { \__mf_v:n{ks\int_use:N\l__mf_k_int} } = 0
+      { % included angle -> law of cosines
+        \__mf_set:nn {p} { \int_compare:nNnTF {\l__mf_k_int} = 1 {\__mf_v:n{s2}} {\__mf_v:n{s1}} }
+        \__mf_set:nn {q} { \int_compare:nNnTF {\l__mf_k_int} = 3 {\__mf_v:n{s2}} {\__mf_v:n{s3}} }
+        \__mf_set:nn {s\int_use:N\l__mf_k_int} { sqrt((\__mf_v:n{p})^2+(\__mf_v:n{q})^2-2*\__mf_v:n{p}*\__mf_v:n{q}*cosd(\__mf_v:n{a\int_use:N\l__mf_k_int})) }
+        \__mf_tri_sss:
+      }
+      { % SSA: the other given side
+        \int_step_inline:nn {3} { \bool_lazy_and:nnT { \int_compare_p:nNn {##1} != {\l__mf_k_int} } { \int_compare_p:nNn {\__mf_v:n{ks##1}} = 1 }
+            { \int_set:Nn \l__mf_i_int {##1} } }
+        \__mf_set:nn {a\int_use:N\l__mf_i_int} { asind( min(1, \__mf_v:n{s\int_use:N\l__mf_i_int}*sind(\__mf_v:n{a\int_use:N\l__mf_k_int})/\__mf_v:n{s\int_use:N\l__mf_k_int}) ) }
+        \__mf_settx:nn {ka\int_use:N\l__mf_i_int} {1}
+        \__mf_tri_third_angle:
+        \__mf_tri_aas:
+      }
+  }
+\NewDocumentCommand \mfTriangle { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/poly}{A=24, B=90, AB=12, BC~label=x, C~label=none, CA~label=auto, #1}
+    \int_set:Nn \l_mf_round_int { \mf_pk:n{round} }
+    \__mf_tri_solve:
+    \mf_poly_init:n {3} \int_zero:N \l__mf_extra_int
+    \mf_poly_pt:nnn {1} {0} {0}
+    \mf_poly_pt:nnn {2} { \__mf_v:n{s3} } {0}
+    \mf_poly_pt:nnn {3} { \__mf_v:n{s2}*cosd(\__mf_v:n{a1}) } { \__mf_v:n{s2}*sind(\__mf_v:n{a1}) }
+    \mf_poly_vertex_from_keys:nn {1} {A} \mf_poly_vertex_from_keys:nn {2} {B} \mf_poly_vertex_from_keys:nn {3} {C}
+    \mf_poly_side_from_keys:nn {1} {AB} \mf_poly_side_from_keys:nn {2} {BC} \mf_poly_side_from_keys:nn {3} {CA}
+    \mf_poly_finish:nn {AB,BC,CA}
+      { \mf_poly_height_from_keys:nnn {1} {A} {2} \mf_poly_height_from_keys:nnn {2} {B} {3} \mf_poly_height_from_keys:nnn {3} {C} {1} }
+    \group_end:
+  }
+%% ================================================================= quadrilaterals
+\cs_new_protected:Npn \__mf_quad_common:
+  {
+    \mf_poly_vertex_from_keys:nn {1} {A} \mf_poly_vertex_from_keys:nn {2} {B}
+    \mf_poly_vertex_from_keys:nn {3} {C} \mf_poly_vertex_from_keys:nn {4} {D}
+    \mf_poly_side_from_keys:nn {1} {AB} \mf_poly_side_from_keys:nn {2} {BC}
+    \mf_poly_side_from_keys:nn {3} {CD} \mf_poly_side_from_keys:nn {4} {DA}
+    \mf_poly_finish:nn {AB,BC,CD,DA}
+      {
+        \mf_poly_height_from_keys:nnn {4} {D} {1} \mf_poly_height_from_keys:nnn {3} {C} {1}
+        \mf_poly_height_from_keys:nnn {1} {A} {3} \mf_poly_height_from_keys:nnn {2} {B} {3}
+        \mf_resolve:eee { \mf_pk:n {dAC~label} } {0} { \exp_not:N \mf_measure:nn {\__mf_v:n{dACm}} {\mf_pk:n{unit}} } \tl_set_eq:NN \l_tmpa_tl \l_mf_lab_tl
+        \mf_resolve:eee { \mf_pk:n {dBD~label} } {0} { \exp_not:N \mf_measure:nn {\__mf_v:n{dBDm}} {\mf_pk:n{unit}} } \tl_set_eq:NN \l_tmpb_tl \l_mf_lab_tl
+        \use:e { \exp_not:N \mf_quad_diagonals:nnnnnnnn { \mf_bool:n{dAC} } { \exp_not:V \l_tmpa_tl } { \__mf_style:n{\mf_pk:n{dAC~style}} }
+           { \mf_bool:n{dBD} } { \exp_not:V \l_tmpb_tl } { \__mf_style:n{\mf_pk:n{dBD~style}} } { \mf_pk:n{cross} } { \mf_bool:n {right~angle~squares} } }
+      }
+  }
+\cs_new_protected:Npn \__mf_quad_diag_measures:
+  {
+    \__mf_set:nn {dACm} { sqrt((\__mf_v:n{x3}-\__mf_v:n{x1})^2+(\__mf_v:n{y3}-\__mf_v:n{y1})^2) }
+    \__mf_set:nn {dBDm} { sqrt((\__mf_v:n{x4}-\__mf_v:n{x2})^2+(\__mf_v:n{y4}-\__mf_v:n{y2})^2) }
+  }
+\NewDocumentCommand \mfRectangle { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/poly}{kind=rectangle, AB=10, BC=6, CD~label=none, DA~label=none, #1}
+    \int_set:Nn \l_mf_round_int { \mf_pk:n{round} }
+    \str_if_eq:eeT { \mf_pk:n{kind} } {square} { \pgfqkeys{/mf/poly}{BC=\mf_pk:n{AB}} \str_if_eq:eeT {\mf_pk:n{BC~label}} {auto} { \pgfqkeys{/mf/poly}{BC~label=none} } }
+    \mf_poly_init:n {4} \int_zero:N \l__mf_extra_int
+    \mf_poly_pt:nnn {1} {0} {0}  \mf_poly_pt:nnn {2} {\mf_pk:n{AB}} {0}
+    \mf_poly_pt:nnn {3} {\mf_pk:n{AB}} {\mf_pk:n{BC}}  \mf_poly_pt:nnn {4} {0} {\mf_pk:n{BC}}
+    \__mf_quad_diag_measures:
+    \__mf_quad_common:
+    \group_end:
+  }
+\NewDocumentCommand \mfParallelogram { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/poly}{kind=parallelogram, AB=10, DA=6, A=60, AB~arrows=1, CD~arrows=1, BC~arrows=2, DA~arrows=2, CD~label=none, BC~label=none, #1}
+    \int_set:Nn \l_mf_round_int { \mf_pk:n{round} }
+    \str_if_eq:eeT { \mf_pk:n{kind} } {rhombus} { \pgfqkeys{/mf/poly}{DA=\mf_pk:n{AB}} }
+    \tl_if_blank:eT { \mf_pk:n{A} } { \pgfqkeys{/mf/poly}{A=60} }
+    \mf_poly_init:n {4} \int_zero:N \l__mf_extra_int
+    \mf_poly_pt:nnn {1} {0} {0}  \mf_poly_pt:nnn {2} {\mf_pk:n{AB}} {0}
+    \mf_poly_pt:nnn {4} {(\mf_pk:n{DA})*cosd(\mf_pk:n{A})} {(\mf_pk:n{DA})*sind(\mf_pk:n{A})}
+    \mf_poly_pt:nnn {3} {\__mf_v:n{x2}+\__mf_v:n{x4}} {\__mf_v:n{y4}}
+    \__mf_quad_diag_measures:
+    \__mf_quad_common:
+    \group_end:
+  }
+%% trapezoid: kind = right (DA is the height) | isosceles | trapezoid (scalene, from angle A);  AB, CD bases, h height
+\NewDocumentCommand \mfTrapezoid { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/poly}{kind=right, AB=12, CD=7, AB~arrows=1, CD~arrows=1, BC~label=x}
+    \tl_if_in:nnT {#1} {isosceles} { \pgfqkeys{/mf/poly}{CD=6, hD=true, hD~label=measure, BC~label=none, BC~ticks=1, DA~ticks=1} }
+    \tl_if_in:nnT {#1} {kind=trapezoid} { \pgfqkeys{/mf/poly}{CD=6, hD=true, hD~label=measure, BC~label=none} }
+    \pgfqkeys{/mf/poly}{#1}
+    \int_set:Nn \l_mf_round_int { \mf_pk:n{round} }
+    \str_case:enF { \mf_pk:n{kind} }
+      {
+        {right}     { \tl_if_blank:eT {\mf_pk:n{DA}} { \pgfqkeys{/mf/poly}{DA=\tl_if_blank:eTF{\mf_pk:n{h}}{5}{\mf_pk:n{h}}} }
+                      \__mf_settx:nn {hh} {\mf_pk:n{DA}} \__mf_set:nn {dx} {0} }
+        {isosceles} { \__mf_settx:nn {hh} { \tl_if_blank:eTF{\mf_pk:n{h}}{5}{\mf_pk:n{h}} } \__mf_set:nn {dx} { ((\mf_pk:n{AB})-(\mf_pk:n{CD}))/2 } }
+      }
+      { % scalene: angle A (default 60) and height
+        \__mf_settx:nn {hh} { \tl_if_blank:eTF{\mf_pk:n{h}}{5}{\mf_pk:n{h}} }
+        \__mf_set:nn {dx} { \__mf_v:n{hh} / tand(\tl_if_blank:eTF{\mf_pk:n{A}}{60}{\mf_pk:n{A}}) }
+      }
+    \mf_poly_init:n {4} \int_zero:N \l__mf_extra_int
+    \mf_poly_pt:nnn {1} {0} {0}  \mf_poly_pt:nnn {2} {\mf_pk:n{AB}} {0}
+    \mf_poly_pt:nnn {4} {\__mf_v:n{dx}} {\__mf_v:n{hh}}  \mf_poly_pt:nnn {3} {\__mf_v:n{dx}+(\mf_pk:n{CD})} {\__mf_v:n{hh}}
+    \__mf_quad_diag_measures:
+    \__mf_quad_common:
+    \group_end:
+  }
+%% kite: AB = BC, CD = DA, angle B at the top
+\NewDocumentCommand \mfKite { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/poly}{AB=5, DA=9, B=100, AB~ticks=1, BC~ticks=1, CD~ticks=2, DA~ticks=2, BC~label=none, CD~label=none, #1}
+    \int_set:Nn \l_mf_round_int { \mf_pk:n{round} }
+    \__mf_set:nn {hb} { (\mf_pk:n{B})/2 }
+    \__mf_set:nn {wx} { (\mf_pk:n{AB})*sind(\__mf_v:n{hb}) }  \__mf_set:nn {wy} { (\mf_pk:n{AB})*cosd(\__mf_v:n{hb}) }
+    \mf_poly_init:n {4} \int_zero:N \l__mf_extra_int
+    \mf_poly_pt:nnn {1} {\__mf_v:n{wx}} {-\__mf_v:n{wy}}  \mf_poly_pt:nnn {2} {0} {0}
+    \mf_poly_pt:nnn {3} {-\__mf_v:n{wx}} {-\__mf_v:n{wy}}
+    \mf_poly_pt:nnn {4} {0} { -\__mf_v:n{wy} - sqrt(max((\mf_pk:n{DA})^2 - (\__mf_v:n{wx})^2, 0.01)) }
+    \__mf_quad_diag_measures:
+    \__mf_quad_common:
+    \group_end:
+  }
+%% ================================================================= regular polygon
+\NewDocumentCommand \mfRegularPolygon { O{} }
+  {
+    \group_begin:
+    \pgfqkeys{/mf/poly}{#1}
+    \int_set:Nn \l_mf_round_int { \mf_pk:n{round} }
+    \int_set:Nn \l__mf_n_int { \mf_pk:n{n} }
+    \__mf_set:nn {R} { \str_case:enF {\mf_pk:n{size~by}} { {radius}{\mf_pk:n{size}} {apothem}{(\mf_pk:n{size})/cosd(180/\l__mf_n_int)} }
+                        { (\mf_pk:n{size})/(2*sind(180/\l__mf_n_int)) } }
+    \__mf_set:nn {ap} { \__mf_v:n{R}*cosd(180/\l__mf_n_int) }
+    \__mf_set:nn {sd} { 2*\__mf_v:n{R}*sind(180/\l__mf_n_int) }
+    \mf_poly_init:n { \mf_pk:n{n} }
+    \int_step_inline:nn {\l__mf_n_int}
+      { \mf_poly_pt:nnn {##1} { \__mf_v:n{R}*cosd(-90-180/\l__mf_n_int+(##1-1)*360/\l__mf_n_int) }
+                              { \__mf_v:n{R}*sind(-90-180/\l__mf_n_int+(##1-1)*360/\l__mf_n_int) }
+        \__mf_settx:nn {ticks##1} { \mf_pk:n{side~ticks} } \__mf_settx:nn {arcs##1} { \mf_pk:n{angle~arcs} }
+        \int_compare:nNnT { \mf_bool:n{letters} } = 1 { \__mf_settx:nn {name##1} { \int_to_Alph:n {##1} } } }
+    \int_zero:N \l__mf_extra_int
+    \mf_poly_extra:nnn {1} {0} {0}                       % centre
+    \mf_poly_extra:nnn {2} {0} {-\__mf_v:n{ap}}          % middle of the bottom side
+    \mf_resolve:eee { \mf_pk:n{side~label} } {1} { \exp_not:N \mf_measure:nn {\__mf_v:n{sd}} {\mf_pk:n{unit}} }
+    \__mf_settx:nn {slab1} { \exp_not:V \l_mf_lab_tl }
+    \mf_resolve:eee { \mf_pk:n{angle~label} } {1} { \mf_num:n{180-360/\l__mf_n_int}^\circ }
+    \__mf_settx:nn {alab1} { \exp_not:V \l_mf_lab_tl }
+    \mf_resolve:eee { \mf_pk:n{apothem~label} } {1} { \exp_not:N \mf_measure:nn {\__mf_v:n{ap}} {\mf_pk:n{unit}} } \tl_set_eq:NN \l_tmpa_tl \l_mf_lab_tl
+    \mf_resolve:eee { \mf_pk:n{radius~label} } {1} { \exp_not:N \mf_measure:nn {\__mf_v:n{R}} {\mf_pk:n{unit}} } \tl_set_eq:NN \l_tmpb_tl \l_mf_lab_tl
+    \mf_poly_fit:nnnnn {0} {0} { \mf_pk:n{turn} } { \mf_pk:n{width} } { \mf_pk:n{height} }
+    \begin{tikzpicture}[mf, scale=\mf_pk:n{scale}, every~node/.append~style={font=\mf_font:}]
+      \mf_poly_outline:n {mf}
+      \int_compare:nNnT { \mf_bool:n{radii} } = 1
+        { \int_step_inline:nn {\l__mf_n_int} { \mf_poly_segment:nnnnnn {\__mf_v:n{ex1}} {\__mf_v:n{ey1}} {\__mf_v:n{x##1}} {\__mf_v:n{y##1}} {} { \__mf_style:n{\mf_pk:n{radius~style}} } } }
+      \int_compare:nNnT { \mf_bool:n{radius} } = 1
+        { \mf_poly_segment:nnnnnn {\__mf_v:n{ex1}} {\__mf_v:n{ey1}} {\__mf_v:n{x2}} {\__mf_v:n{y2}} {\exp_not:V\l_tmpb_tl} { \__mf_style:n{\mf_pk:n{radius~style}} } }
+      \int_compare:nNnT { \mf_bool:n{apothem} } = 1
+        {
+          \use:e { \exp_not:N \mf@seg {\__mf_v:n{ex1}} {\__mf_v:n{ey1}} {\__mf_v:n{ex2}} {\__mf_v:n{ey2}} { \__mf_style:n{\mf_pk:n{apothem~style}} } }
+          \__mf_set:nn {ux} { (\__mf_v:n{ex1}-\__mf_v:n{ex2}) } \__mf_set:nn {uy} { (\__mf_v:n{ey1}-\__mf_v:n{ey2}) }
+          \__mf_set:nn {ul} { sqrt((\__mf_v:n{ux})^2+(\__mf_v:n{uy})^2) } \__mf_set:nn {ux} {\__mf_v:n{ux}/\__mf_v:n{ul}} \__mf_set:nn {uy} {\__mf_v:n{uy}/\__mf_v:n{ul}}
+          \int_compare:nNnT { \mf_bool:n {right~angle~squares} } = 1
+            { \use:e { \exp_not:N \mf@path {mf~thin} { (\__mf_r:n{\__mf_v:n{ex2}+0.18*\__mf_v:n{ux}},\__mf_r:n{\__mf_v:n{ey2}+0.18*\__mf_v:n{uy}}) --
+                 (\__mf_r:n{\__mf_v:n{ex2}+0.18*\__mf_v:n{ux}+0.18*\__mf_v:n{uy}},\__mf_r:n{\__mf_v:n{ey2}+0.18*\__mf_v:n{uy}-0.18*\__mf_v:n{ux}}) --
+                 (\__mf_r:n{\__mf_v:n{ex2}+0.18*\__mf_v:n{uy}},\__mf_r:n{\__mf_v:n{ey2}-0.18*\__mf_v:n{ux}}) } } }
+          \tl_if_blank:VF \l_tmpa_tl
+            { \use:e { \exp_not:N \mf@nodeA {\__mf_r:n{(\__mf_v:n{ex1}+\__mf_v:n{ex2})/2+0.06*\__mf_v:n{uy}}} {\__mf_r:n{(\__mf_v:n{ey1}+\__mf_v:n{ey2})/2-0.06*\__mf_v:n{ux}}}
+                { \exp_not:N \mflab {\exp_not:V \l_tmpa_tl} } {\__mf_r:n{round(atand(\__mf_v:n{ux},-\__mf_v:n{uy}),2)}} {mf~halo} } }
+        }
+      \int_compare:nNnT { \mf_bool:n{center~dot} } = 1
+        { \use:e { \exp_not:N \mf@dot {\__mf_v:n{ex1}} {\__mf_v:n{ey1}} {} }
+          \tl_if_blank:eF { \mf_pk:n{center~name} }
+            { \use:e { \exp_not:N \mf@nodeA {\__mf_v:n{ex1}} {\__mf_r:n{\__mf_v:n{ey1}+0.08}} { \exp_not:N \mflab {\mf_pk:n{center~name}} } {south~west} {} } } }
+      \mf_poly_marks:
+    \end{tikzpicture}
+    \group_end:
+  }
+\cs_generate_variant:Nn \tl_if_blank:nF {V}
+\ExplSyntaxOff

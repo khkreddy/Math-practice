@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/khkreddy/Math-practice/schema/profile.schema.json",
+  "title": "Student profile",
+  "description": "Shape stored by PUT /admin/profile. One profile. A filled profile is private and must not be committed here. Hinge ids are strings supplied from the private answer key.",
+  "type": "object",
+  "required": ["updated_at", "hinges"],
+  "properties": {
+    "updated_at": { "type": "string", "format": "date-time" },
+    "hinges": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/hinge" }
+    }
+  },
+  "$defs": {
+    "hinge": {
+      "type": "object",
+      "required": ["state", "evidence"],
+      "properties": {
+        "state": {
+          "enum": ["unseen", "emerging", "practicing", "mastered", "slipping"]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["sheet_id", "question_id", "result", "at"],
+            "properties": {
+              "sheet_id": { "type": "string" },
+              "question_id": { "type": "string" },
+              "part": { "type": "string" },
+              "result": {
+                "enum": ["correct", "incorrect", "partial", "needs_review", "not_attempted"]
+              },
+              "misconception": { "type": "string" },
+              "at": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/khkreddy/Math-practice/schema/submission.schema.json",
+  "title": "Submission",
+  "description": "What POST /submit/:id stores. Photos are base64 JPEG, each stored value <= 1 MB. Do not commit a real submission to this repository.",
+  "type": "object",
+  "required": ["sheet_id", "submitted_at", "answers"],
+  "properties": {
+    "sheet_id": { "type": "string" },
+    "submitted_at": { "type": "string", "format": "date-time" },
+    "answers": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/answer" }
+    }
+  },
+  "$defs": {
+    "answer": {
+      "type": "object",
+      "properties": {
+        "value": { "type": "string" },
+        "photo": { "type": "string", "description": "Base64 JPEG without a data: prefix. Max 1 MB." },
+        "content_type": { "const": "image/jpeg" },
+        "parts": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/answer" }
+        }
+      }
+    }
+  }
+}
