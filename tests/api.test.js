@@ -10,11 +10,13 @@ beforeAll(async () => {
   mf = new Miniflare({
     modules: true,
     scriptPath: "worker/src/index.js",
+    // Miniflare treats imported .js files as CommonJS unless a rule says otherwise.
+    modulesRules: [{ type: "ESModule", include: ["worker/**/*.js"], fallthrough: true }],
     compatibilityDate: "2025-04-01",
     kvNamespaces: ["SHEETS", "SUBMISSIONS", "PROFILE"],
     bindings: {
       ADMIN_TOKEN: ADMIN,
-      PAGES_ORIGIN: ORIGIN,
+      PAGES_ORIGIN: `${ORIGIN}, https://math-practice-9wc.pages.dev`,
     },
   });
   await mf.ready;
@@ -140,6 +142,9 @@ describe("math practice worker", () => {
     expect(sent.status).toBe(200);
     const sentBody = await sent.json();
     expect(sentBody.ok).toBe(true);
+    expect(sentBody.feedback.items.find((item) => item.id === "q1").status).toBe("correct");
+    expect(JSON.stringify(sentBody)).not.toContain("SENTINEL_DO_NOT_LEAK");
+    expect(JSON.stringify(sentBody.feedback)).not.toContain('"key"');
 
     const again = await mf.dispatchFetch(`https://math-practice.test/submit/sheet-1?t=${token}`, {
       method: "POST",
@@ -205,5 +210,289 @@ describe("math practice worker", () => {
   it("rejects a mismatched sheet id", async () => {
     const res = await admin("PUT", "/admin/sheet/other", { sheet, answer_key: key });
     expect(res.status).toBe(400);
+  });
+
+  it("allows each origin listed in PAGES_ORIGIN", async () => {
+    for (const origin of [ORIGIN, "https://math-practice-9wc.pages.dev"]) {
+      const res = await mf.dispatchFetch("https://math-practice.test/health", {
+        headers: { Origin: origin },
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Access-Control-Allow-Origin")).toBe(origin);
+      const preflight = await mf.dispatchFetch("https://math-practice.test/submit/sheet-1", {
+        method: "OPTIONS",
+        headers: { Origin: origin, "Access-Control-Request-Method": "POST" },
+      });
+      expect(preflight.status).toBe(204);
+      expect(preflight.headers.get("Access-Control-Allow-Origin")).toBe(origin);
+    }
+    const evil = await mf.dispatchFetch("https://math-practice.test/health", {
+      headers: { Origin: "https://evil.example" },
+    });
+    expect(evil.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
+
+  it("hides the key until Finish, keeps the first send, and stores one no-credit retry", async () => {
+    const practice = {
+      ...sheet,
+      id: "sheet-feedback",
+      total_marks: 4,
+      sections: [
+        {
+          id: "A",
+          title: "Section A",
+          marks_scheme: "2 x 1 + 2",
+          questions: [
+            {
+              id: "q1",
+              qno: 1,
+              type: "mcq",
+              marks: 1,
+              text: "Which of the following is a factor of 44?",
+              options: [
+                { id: "a", text: "5" },
+                { id: "d", text: "11" },
+              ],
+            },
+            {
+              id: "q2",
+              qno: 2,
+              type: "short",
+              marks: 1,
+              text: "Write a number.",
+              response: "short",
+            },
+            {
+              id: "q3",
+              qno: 3,
+              type: "construction",
+              marks: 2,
+              text: "Draw a number line.",
+              response: "photo",
+            },
+          ],
+        },
+      ],
+    };
+    const practiceKey = {
+      sheet_id: "sheet-feedback",
+      secret_marker: "SENTINEL_DO_NOT_LEAK",
+      questions: {
+        q1: {
+          accept: ["d"],
+          match: "choice",
+          action: "keep practicing",
+          note: "H3#mx4 sign error",
+          wrong: { a: "H3#mx4" },
+          mx_id: "H3#mx4",
+          worked_solution: { steps: ["LEAK_SOLUTION_STEP"] },
+        },
+        q2: {
+          accept: ["12"],
+          match: "number",
+          note: "Count on from 10.",
+          not_attempted_action: "Write the number question 2 asks for.",
+          worked_solution: { steps: ["10 and 2 more is 12."] },
+        },
+      },
+    };
+    const created = await admin("PUT", "/admin/sheet/sheet-feedback", {
+      sheet: practice,
+      answer_key: practiceKey,
+    });
+    const token = (await created.json()).token;
+    const sent = await mf.dispatchFetch(`https://math-practice.test/submit/sheet-feedback?t=${token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        answers: {
+          q1: { value: "a" },
+          q3: { photo: btoa("tiny-jpeg"), content_type: "image/jpeg" },
+        },
+      }),
+    });
+    expect(sent.status).toBe(200);
+    const checked = await sent.json();
+    const checkedText = JSON.stringify(checked);
+    expect(checked.feedback.phase).toBe("checked");
+    expect(checked.feedback.summary).toMatchObject({ typed_marks: 0, typed_max: 2, pending_marks: 2 });
+    expect(checked.feedback.items.map((item) => item.status)).toEqual(["not_yet", "blank", "pending_review"]);
+    for (const hidden of ["SENTINEL_DO_NOT_LEAK", "LEAK_SOLUTION_STEP", "keep practicing", "H3#mx4", "Count on from 10.", "d. 11"]) {
+      expect(checkedText).not.toContain(hidden);
+    }
+    expect(checkedText).not.toContain('"key"');
+
+    const early = await mf.dispatchFetch(`https://math-practice.test/finish/sheet-feedback?t=${token}`, { method: "POST" });
+    expect(early.status).toBe(409);
+
+    const retried = await mf.dispatchFetch(`https://math-practice.test/retry/sheet-feedback?t=${token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        answers: {
+          q1: { value: "d" },
+          q2: { value: "should-not-be-stored" },
+        },
+      }),
+    });
+    expect(retried.status).toBe(200);
+    const retryBody = await retried.json();
+    expect(retryBody.feedback.phase).toBe("retried");
+    expect(JSON.stringify(retryBody)).not.toContain("LEAK_SOLUTION_STEP");
+    expect(retryBody.feedback.summary.typed_marks).toBe(0);
+
+    const stored = await admin("GET", "/admin/submission/sheet-feedback");
+    const storedBody = await stored.json();
+    expect(storedBody.answers.q1.value).toBe("a");
+    expect(storedBody.answers.q2).toBeUndefined();
+    expect(storedBody.retry.no_credit).toBe(true);
+    expect(storedBody.retry.answers.q1.value).toBe("d");
+    expect(storedBody.retry.answers.q2).toBeUndefined();
+    expect(storedBody.finish).toBeNull();
+
+    const done = await mf.dispatchFetch(`https://math-practice.test/finish/sheet-feedback?t=${token}`, { method: "POST" });
+    expect(done.status).toBe(200);
+    const revealed = await done.json();
+    expect(revealed.feedback.phase).toBe("finished");
+    expect(revealed.feedback.summary.typed_marks).toBe(0);
+    const q1 = revealed.feedback.items.find((item) => item.id === "q1");
+    const q2 = revealed.feedback.items.find((item) => item.id === "q2");
+    expect(q1.key).toBe("d. 11");
+    expect(q1.worked_solution).toContain("LEAK_SOLUTION_STEP");
+    expect(q1.action).toBe("Choose one of the options for question 1.");
+    expect(q1.note).toBe("No verified notes for this item.");
+    expect(q2.note).toBe("Count on from 10.");
+    expect(q2.action).toBe("Write the number question 2 asks for.");
+    expect(q2.worked_solution).toContain("10 and 2 more is 12.");
+    const revealedText = JSON.stringify(revealed);
+    for (const hidden of ["SENTINEL_DO_NOT_LEAK", "keep practicing", "H3#mx4", "mastered", "you learned from this mistake"]) {
+      expect(revealedText).not.toContain(hidden);
+    }
+
+    const again = await mf.dispatchFetch(`https://math-practice.test/finish/sheet-feedback?t=${token}`, { method: "POST" });
+    expect((await again.json()).finished_at).toBe(revealed.finished_at);
+    const after = await admin("GET", "/admin/submission/sheet-feedback");
+    expect((await after.json()).answers.q1.value).toBe("a");
+  });
+
+  it("stores timing and treats I don't know as blank", async () => {
+    const created = await admin("PUT", "/admin/sheet/sheet-timing", {
+      sheet: { ...sheet, id: "sheet-timing" },
+      answer_key: { ...key, sheet_id: "sheet-timing" },
+    });
+    const token = (await created.json()).token;
+    const bad = await mf.dispatchFetch(`https://math-practice.test/submit/sheet-timing?t=${token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        answers: { q1: { value: "d" } },
+        timing: { q1: { edit_count: -1 } },
+      }),
+    });
+    expect(bad.status).toBe(400);
+    expect((await admin("GET", "/admin/submission/sheet-timing")).status).toBe(404);
+
+    const sent = await mf.dispatchFetch(`https://math-practice.test/submit/sheet-timing?t=${token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        answers: { q1: { value: "d" } },
+        timing: {
+          q1: {
+            first_seen_at: "2026-10-11T10:00:00.000Z",
+            time_on_question_ms: 1500,
+            edit_count: 2,
+            idk: true,
+          },
+        },
+      }),
+    });
+    expect(sent.status).toBe(200);
+    const body = await sent.json();
+    expect(body.feedback.items.find((item) => item.id === "q1").status).toBe("blank");
+    const stored = await (await admin("GET", "/admin/submission/sheet-timing")).json();
+    expect(stored.answers.q1).toEqual({ idk: true });
+    expect(stored.timing.q1).toMatchObject({ edit_count: 2, idk: true, time_on_question_ms: 1500 });
+  });
+
+  it("filters the submission list by sheet", async () => {
+    for (const id of ["sheet-list-a", "sheet-list-b"]) {
+      const created = await admin("PUT", `/admin/sheet/${id}`, {
+        sheet: { ...sheet, id },
+        answer_key: { ...key, sheet_id: id },
+      });
+      const token = (await created.json()).token;
+      const sent = await mf.dispatchFetch(`https://math-practice.test/submit/${id}?t=${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers: { q1: { value: "d" } } }),
+      });
+      expect(sent.status).toBe(200);
+    }
+    const only = await admin("GET", "/admin/submissions?sheet=sheet-list-a");
+    const listed = await only.json();
+    expect(listed.submissions.map((item) => item.sheet_id)).toEqual(["sheet-list-a"]);
+  });
+
+  it("updates a sheet and key without rotating the student token", async () => {
+    const created = await admin("PUT", "/admin/sheet/sheet-update", {
+      sheet: { ...sheet, id: "sheet-update" },
+      answer_key: { ...key, sheet_id: "sheet-update" },
+    });
+    const token = (await created.json()).token;
+    const updated = await admin("PUT", "/admin/sheet/sheet-update/content", {
+      sheet: { ...sheet, id: "sheet-update", title: "Revised title" },
+      answer_key: {
+        sheet_id: "sheet-update",
+        questions: { q1: { accept: ["z"], match: "choice" } },
+      },
+    });
+    expect(updated.status).toBe(200);
+    expect((await updated.json()).token).toBe(token);
+    const pub = await mf.dispatchFetch(`https://math-practice.test/sheet/sheet-update?t=${token}`);
+    expect((await pub.json()).sheet.title).toBe("Revised title");
+    const sent = await mf.dispatchFetch(`https://math-practice.test/submit/sheet-update?t=${token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answers: { q1: { value: "d" } } }),
+    });
+    const body = await sent.json();
+    expect(body.feedback.items.find((item) => item.id === "q1").status).toBe("not_yet");
+    expect(JSON.stringify(body)).not.toContain('"key"');
+  });
+
+  it("strips scripts and external links from an inline figure", async () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(1)</script><a href="https://evil.example/x">x</a><a href="#arm">n</a><circle cx="1" cy="1" r="1"/></svg>';
+    const created = await admin("PUT", "/admin/sheet/sheet-svg", {
+      sheet: {
+        ...sheet,
+        id: "sheet-svg",
+        sections: [
+          {
+            ...sheet.sections[0],
+            questions: [
+              {
+                ...sheet.sections[0].questions[0],
+                figure: {
+                  id: "inline",
+                  alt: "A small circle",
+                  data: `data:image/svg+xml;base64,${btoa(svg)}`,
+                },
+              },
+            ],
+          },
+        ],
+      },
+      answer_key: { ...key, sheet_id: "sheet-svg" },
+    });
+    const token = (await created.json()).token;
+    const pub = await mf.dispatchFetch(`https://math-practice.test/sheet/sheet-svg?t=${token}`);
+    const data = (await pub.json()).sheet.sections[0].questions[0].figure.data;
+    expect(data).toContain("<circle");
+    expect(data).toContain('href="#arm"');
+    expect(data).not.toMatch(/script/i);
+    expect(data).not.toMatch(/onload/i);
+    expect(data).not.toContain("evil.example");
+    expect(data.startsWith("data:")).toBe(false);
   });
 });

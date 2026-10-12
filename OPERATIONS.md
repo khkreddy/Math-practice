@@ -14,22 +14,43 @@ export ADMIN_TOKEN=...
 python3 scripts/create_sheet.py --sheet content/sheets/<id>.json --key /path/to/<id>.key.json
 ```
 
-The script prints a new token and a link:
+The script prints a token and a link:
 
-`https://khkreddy.github.io/Math-practice/?sheet=<id>&t=<token>`
+`https://math-practice-9wc.pages.dev/?sheet=<id>&t=<token>`
 
-Email that link to the student. A later `PUT` rotates the token, so send the new link if the sheet is replaced. A final submission already stored is kept. Pass `--allow-resubmit` only when a second send should replace it.
+`PAGES_URL` overrides that base. Email the link to the student.
 
-`web/config.js` must already contain the Worker origin, and Pages must be deploying from GitHub Actions. See `README.md`.
+A plain `PUT` (the script without `--update`) rotates the token, so send the new link if you replace the sheet that way. To fix a live sheet or key and keep the link that was already emailed:
+
+```bash
+python3 scripts/create_sheet.py --update --sheet content/sheets/<id>.json --key /path/to/<id>.key.json
+```
+
+That calls `PUT /admin/sheet/<id>/content` and does not change the token. A final submission already stored is kept. Pass `--allow-resubmit` only when a second send should replace it.
+
+Deploy the page from this machine, not from GitHub Actions:
+
+```bash
+npx wrangler pages deploy web --project-name math-practice --branch main
+```
+
+`web/config.js` must already contain the Worker origin. See `README.md`.
+
+## What the student sees after sending
+
+The first send is checked on the Worker. The page shows Correct, Not yet, Left blank, or that a drawing waits for you. It does not show the key. Not-yet items can be tried once more. That try is stored apart from the first send and does not change the marks. **Finish** then shows the key, a worked solution when the key has `worked_solution.steps` (or `feedback.worked_solution`), and a next step from `action` or `feedback.action`. A blank uses `not_attempted_action` when that is set. If there is no recorded note, the page says "No verified notes for this item."
+
+Do not put a mix-up id, or the words "keep practicing", in those fields. The page will not show them. The private profile states below are never shown to the student.
 
 ## 2. Fetch what was sent
 
 ```bash
 python3 scripts/fetch_submissions.py --since 2026-10-11T09:30:00Z
+python3 scripts/fetch_submissions.py --sheet <sheet-id>
 python3 scripts/fetch_submissions.py --id <sheet-id> > /path/to/submission.json
 ```
 
-The list has no photo bytes. The single-sheet call includes them.
+The list has no photo bytes. `--sheet` limits it to one sheet. The single-sheet call includes photos. `retry` on that record is the second try, with no credit. `answers` is still the first send.
 
 ## 3. Score
 
@@ -67,7 +88,7 @@ For every scored leaf that has hinge ids on the answer key, append:
 
 `result` is `correct`, `incorrect`, `partial`, `needs_review`, or `not_attempted`. Copy `misconception` only when the scorer reported one.
 
-State, from the evidence for that hinge, newest last. Ignore `needs_review` and `not_attempted` when deciding the state (they do not move it).
+State, from the evidence for that hinge, newest last. Ignore `needs_review` and `not_attempted` when deciding the state (they do not move it). These state names stay in this private profile. Do not copy them onto the student page.
 
 | Situation | State |
 |---|---|

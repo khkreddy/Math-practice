@@ -19,9 +19,35 @@
       "additionalProperties": false,
       "properties": {
         "accept": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Accepted responses. Compared after the scorer's normalization, or as choice ids."
+          "oneOf": [
+            { "type": "string" },
+            { "type": "number" },
+            { "type": "array", "items": { "type": ["string", "number"] } }
+          ],
+          "description": "Accepted responses. A string or a list. Compared after the scorer's normalization, or as choice ids."
+        },
+        "action": {
+          "type": "string",
+          "description": "Specific next step shown after Finish when this item is not yet right. Do not name a mix-up."
+        },
+        "not_attempted_action": {
+          "type": "string",
+          "description": "Specific next step shown after Finish when this item was left blank."
+        },
+        "note": {
+          "type": "string",
+          "description": "A note already recorded for this item. Omit it when there is no verified note. Never a mix-up id."
+        },
+        "worked_solution": { "$ref": "#/$defs/worked" },
+        "feedback": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "action": { "type": "string" },
+            "not_attempted_action": { "type": "string" },
+            "note": { "type": "string" },
+            "worked_solution": { "$ref": "#/$defs/worked" }
+          }
         },
         "match": {
           "enum": ["text", "choice", "number", "set", "token"],
@@ -38,6 +64,17 @@
         "parts": {
           "type": "object",
           "additionalProperties": { "$ref": "#/$defs/node" }
+        }
+      }
+    },
+    "worked": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "steps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Shown only after the student presses Finish."
         }
       }
     }

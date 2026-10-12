@@ -76,10 +76,18 @@
     "figure": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "src", "alt"],
+      "required": ["id", "alt"],
+      "anyOf": [
+        { "required": ["src"] },
+        { "required": ["data"] }
+      ],
       "properties": {
         "id": { "type": "string" },
         "src": { "type": "string", "description": "Site-relative SVG path, for example figures/q24.svg" },
+        "data": {
+          "type": "string",
+          "description": "Inline SVG markup, or a data:image/svg+xml URL. The Worker strips scripts and external links before the page shows it."
+        },
         "alt": { "type": "string" }
       }
     }
